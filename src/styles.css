@@ -1,0 +1,38 @@
+.joplin-live-math-inline {
+	color: var(--joplin-color);
+	display: inline-block;
+	max-width: 100%;
+	padding: 0 0.05em;
+	vertical-align: baseline;
+}
+
+.joplin-live-math-display {
+	color: var(--joplin-color);
+	display: block;
+	margin: 0.45em 0;
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 0.15em 0;
+}
+
+.joplin-live-math-display .katex-display {
+	margin: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.joplin-live-math-error {
+	border-bottom: 1px dotted #cc3333;
+	color: #cc3333;
+	font-family: var(--joplin-font-family);
+}
+
+.joplin-live-math-source-inline {
+	background-color: rgba(127, 127, 127, 0.14);
+	border-radius: 3px;
+}
+
+.cm-line.joplin-live-math-source-line {
+	background-color: rgba(127, 127, 127, 0.1);
+}

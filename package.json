@@ -1,0 +1,40 @@
+{
+	"name": "joplin-plugin-live-math",
+	"version": "0.1.5",
+	"description": "Obsidian-style live KaTeX preview for Joplin's CodeMirror 6 Markdown editor.",
+	"main": "dist/index.js",
+	"scripts": {
+		"dist": "webpack --env joplin-plugin-config=buildMain && webpack --env joplin-plugin-config=buildExtraScripts && node scripts/archive.js",
+		"build": "npm run dist",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"keywords": [
+		"joplin-plugin",
+		"joplin",
+		"codemirror",
+		"katex",
+		"math"
+	],
+	"license": "MIT",
+	"files": [
+		"publish"
+	],
+	"dependencies": {
+		"katex": "^0.16.11"
+	},
+	"devDependencies": {
+		"@codemirror/language": "^6.10.2",
+		"@codemirror/state": "^6.5.2",
+		"@codemirror/view": "^6.36.8",
+		"@types/katex": "^0.16.7",
+		"@types/node": "^22.10.7",
+		"copy-webpack-plugin": "^12.0.2",
+		"tar": "^7.4.3",
+		"ts-loader": "^9.5.1",
+		"typescript": "^5.7.3",
+		"vitest": "^2.1.8",
+		"webpack": "^5.97.1",
+		"webpack-cli": "^6.0.1"
+	}
+}
