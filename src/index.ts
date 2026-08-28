@@ -18,13 +18,13 @@ const updateEditorSetting = async () => {
 		});
 	} catch (error) {
 		// The editor command is unavailable until a CM6 editor has loaded.
-		console.info('Joplin Live Math: deferred editor setting update', error);
+		console.info('Joplin-Live-Math: deferred editor setting update', error);
 	}
 };
 
 const registerSettings = async () => {
 	await joplin.settings.registerSection(SETTINGS_SECTION, {
-		label: 'Joplin Live Math',
+		label: 'Joplin-Live-Math',
 		description: 'Render LaTeX math in the Markdown editor when the expression is not being edited.',
 		iconName: 'fas fa-square-root-alt',
 	});

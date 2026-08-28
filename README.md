@@ -1,6 +1,13 @@
-# Joplin Live Math
+# Joplin-Live-Math
 
-Joplin Live Math renders LaTeX math directly inside Joplin's CodeMirror 6 Markdown editor when the cursor or selection is not editing the expression. When the cursor enters the expression, the original Markdown source is shown again.
+Joplin-Live-Math renders LaTeX math directly inside Joplin's CodeMirror 6 Markdown editor when the cursor or selection is not editing the expression. When the cursor enters the expression, the original Markdown source is shown again.
+
+## Project Links
+
+- Source repository: [git.pawelsarkowicz.xyz/ps/Joplin-Live-Math](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math)
+- Releases: [git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/releases](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/releases)
+- Issues: [git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/issues](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/issues)
+- Clone URL: `ssh://git@git.pawelsarkowicz.xyz:2222/ps/Joplin-Live-Math.git`
 
 ## Screenshots
 
@@ -26,7 +33,7 @@ E[X^2] = 1
 $$
 ```
 
-The display form is intentionally conservative in this first version: the opening and closing `$$` delimiters should be on their own lines.
+Display math can use standalone delimiter lines or same-line `$$...$$` syntax. Display math nested in Markdown containers such as blockquotes and list items uses inline editor layout so it stays aligned with the surrounding Markdown.
 
 ## Behavior
 
@@ -39,7 +46,9 @@ The display form is intentionally conservative in this first version: the openin
 
 ## Installation
 
-Build the plugin, then install the generated JPL from Joplin:
+Download the latest `.jpl` file from the [releases page](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/releases), then install it in Joplin desktop from **Tools > Options > Plugins > Install from file**.
+
+To build the plugin locally instead:
 
 ```bash
 npm install
@@ -49,16 +58,16 @@ npm run dist
 The archive is written to:
 
 ```text
-publish/com.github.psark007.live-math-joplin.jpl
+publish/Joplin-Live-Math.jpl
 ```
-
-In Joplin desktop, open **Tools > Options > Plugins > Install from file** and select the `.jpl` file.
 
 For development, you can also point Joplin's **Development plugins** setting at this repository after running `npm run dist`.
 
 ## Development
 
 ```bash
+git clone ssh://git@git.pawelsarkowicz.xyz:2222/ps/Joplin-Live-Math.git
+cd Joplin-Live-Math
 npm install
 npm test
 npm run dist
@@ -81,17 +90,16 @@ The content script imports CodeMirror packages directly, and the webpack config 
 
 ## Known Limitations
 
-- Display math currently requires delimiter-only `$$` lines.
 - Inline math does not span multiple lines.
 - The parser is conservative around ordinary dollar signs and may leave unusual math-like text as source.
 - Very large notes are rescanned after document or selection changes; this keeps the first version simple and correct.
 
 ## References And Licenses
 
-The CM6 decoration architecture in `src/mathDecorations.ts` was adapted from the StateField/RangeSetBuilder pattern used by `bwat47/joplin-rich-tables`. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The CM6 decoration architecture in `src/mathDecorations.ts` was adapted from the StateField/RangeSetBuilder pattern used by [`bwat47/joplin-rich-tables`](https://github.com/bwat47/joplin-rich-tables). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-- Joplin's official CodeMirror 6 Markdown editor plugin documentation.
-- `bwat47/joplin-rich-tables`, MIT license, especially its use of CM6 content scripts and editor decorations for rendered source.
-- `blueberrycongee/codemirror-live-markdown`, MIT license, especially its high-level live-preview pattern of switching between source and widgets based on selection.
+- [Joplin's official CodeMirror 6 Markdown editor plugin documentation](https://joplinapp.org/help/api/tutorials/cm6_plugin/).
+- [`bwat47/joplin-rich-tables`](https://github.com/bwat47/joplin-rich-tables), MIT license, especially its use of CM6 content scripts and editor decorations for rendered source.
+- [`blueberrycongee/codemirror-live-markdown`](https://github.com/blueberrycongee/codemirror-live-markdown), MIT license, especially its high-level live-preview pattern of switching between source and widgets based on selection.
 
 This plugin is released under the MIT license.

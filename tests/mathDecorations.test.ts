@@ -11,7 +11,7 @@ const collectDecorations = (doc: string, anchor: number) => {
 			mathDecorationsField,
 		],
 	});
-	const ranges: Array<{ from: number; to: number; hasWidget: boolean; className?: string }> = [];
+	const ranges: Array<{ from: number; to: number; hasWidget: boolean; block: boolean; className?: string }> = [];
 
 	const decorationSet = state.field(mathDecorationsField).decorations;
 
@@ -20,6 +20,7 @@ const collectDecorations = (doc: string, anchor: number) => {
 			from,
 			to,
 			hasWidget: !!value.spec.widget,
+			block: value.spec.block === true,
 			className: value.spec.class,
 		});
 	});
@@ -48,6 +49,24 @@ describe('math decorations', () => {
 				hasWidget: false,
 				className: 'joplin-live-math-source-inline',
 			}),
+		]);
+	});
+
+	it('uses block layout for top-level display math', () => {
+		expect(collectDecorations('$$\nx^2\n$$', 9)).toEqual([
+			expect.objectContaining({ hasWidget: true, block: true }),
+		]);
+	});
+
+	it('uses inline layout for list-contained display math', () => {
+		expect(collectDecorations('- $$\n  x^2\n  $$', 0)).toEqual([
+			expect.objectContaining({ hasWidget: true, block: false }),
+		]);
+	});
+
+	it('uses inline layout for same-line double-dollar math', () => {
+		expect(collectDecorations('> An equation $$ x^2 $$ here', 0)).toEqual([
+			expect.objectContaining({ hasWidget: true, block: false }),
 		]);
 	});
 });

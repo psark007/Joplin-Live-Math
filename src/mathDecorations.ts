@@ -15,6 +15,62 @@ export const liveMathLoadedAttribute = EditorView.editorAttributes.of({
 	'data-joplin-live-math': 'loaded',
 });
 
+const mathWidgetSelector = '[data-joplin-live-math-widget="true"]';
+
+const readPositionAttribute = (element: Element, name: string): number | null => {
+	const value = element.getAttribute(name);
+	if (value === null) {
+		return null;
+	}
+
+	const position = Number(value);
+	return Number.isInteger(position) && position >= 0 ? position : null;
+};
+
+const clickPositionInExpression = (event: MouseEvent, element: Element, contentFrom: number, contentTo: number) => {
+	if (contentTo <= contentFrom) {
+		return contentFrom;
+	}
+
+	const bounds = element.getBoundingClientRect();
+	if (bounds.width <= 0) {
+		return contentFrom;
+	}
+
+	const clickRatio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+	return Math.round(contentFrom + ((contentTo - contentFrom) * clickRatio));
+};
+
+export const liveMathClickHandler = EditorView.domEventHandlers({
+	mousedown: (event, view) => {
+		if (event.button !== 0 || !(event.target instanceof Element)) {
+			return false;
+		}
+
+		const widget = event.target.closest(mathWidgetSelector);
+		if (!widget || !view.dom.contains(widget)) {
+			return false;
+		}
+
+		const contentFrom = readPositionAttribute(widget, 'data-joplin-live-math-content-from');
+		const contentTo = readPositionAttribute(widget, 'data-joplin-live-math-content-to');
+		if (contentFrom === null || contentTo === null) {
+			return false;
+		}
+
+		event.preventDefault();
+		view.focus();
+		view.dispatch({
+			selection: {
+				anchor: clickPositionInExpression(event, widget, contentFrom, contentTo),
+			},
+			scrollIntoView: true,
+		});
+
+		return true;
+	},
+});
+
 const selectionTouchesExpression = (state: EditorState, expression: MathExpression): boolean => {
 	for (const range of state.selection.ranges) {
 		if (range.empty) {
@@ -62,7 +118,7 @@ const buildMathDecorations = (state: EditorState): MathDecorationState => {
 
 	for (const expression of expressions) {
 		if (selectionTouchesExpression(state, expression)) {
-			if (expression.kind === 'display') {
+			if (expression.block) {
 				addDisplaySourceLineDecorations(state, expression, builder);
 			} else {
 				builder.add(
@@ -79,8 +135,13 @@ const buildMathDecorations = (state: EditorState): MathDecorationState => {
 			expression.from,
 			expression.to,
 			Decoration.replace({
-				widget: new MathWidget(expression.source, expression.kind === 'display'),
-				block: expression.kind === 'display',
+				widget: new MathWidget(
+					expression.source,
+					expression.displayMode,
+					expression.contentFrom,
+					expression.contentTo
+				),
+				block: expression.block,
 			})
 		);
 	}

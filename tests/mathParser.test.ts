@@ -16,6 +16,16 @@ describe('findMathExpressions', () => {
 		expect(expressions.map(expression => expression.source)).toEqual(['x', 'y']);
 	});
 
+	it('finds inline expressions with interior delimiter whitespace', () => {
+		const expressions = findMathExpressions('Two: $ x $ and $ y $.');
+		expect(expressions.map(expression => expression.source)).toEqual(['x', 'y']);
+	});
+
+	it('does not swallow text between spaced inline expressions', () => {
+		const expressions = findMathExpressions('$ x $ middle $ y $');
+		expect(expressions.map(expression => expression.source)).toEqual(['x', 'y']);
+	});
+
 	it('does not treat common currency as math', () => {
 		expect(findMathExpressions('Price: $20')).toEqual([]);
 	});
@@ -52,6 +62,53 @@ describe('findMathExpressions', () => {
 			expect.objectContaining({
 				kind: 'display',
 				source: '\\frac{1}{n}\\sum_{i=1}^{n}X_i',
+				block: true,
+				displayMode: true,
+			}),
+		]);
+	});
+
+	it('finds same-line double-dollar math as inline-layout math', () => {
+		expect(findMathExpressions('> An equation $$ x + y $$ here')).toEqual([
+			expect.objectContaining({
+				kind: 'display',
+				source: 'x + y',
+				block: false,
+				displayMode: false,
+			}),
+		]);
+	});
+
+	it('finds display math inside blockquotes', () => {
+		const doc = [
+			'> $$',
+			'> x + y',
+			'> $$',
+		].join('\n');
+
+		expect(findMathExpressions(doc)).toEqual([
+			expect.objectContaining({
+				kind: 'display',
+				source: 'x + y',
+				block: false,
+				displayMode: false,
+			}),
+		]);
+	});
+
+	it('finds display math inside list items', () => {
+		const doc = [
+			'- $$',
+			'  x + y',
+			'  $$',
+		].join('\n');
+
+		expect(findMathExpressions(doc)).toEqual([
+			expect.objectContaining({
+				kind: 'display',
+				source: 'x + y',
+				block: false,
+				displayMode: false,
 			}),
 		]);
 	});

@@ -26,6 +26,11 @@ const walkFiles = dir => {
 
 const sha256 = filePath => crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 
+const safeFileBaseName = value => {
+	const sanitized = value.trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+	return sanitized || 'plugin';
+};
+
 if (!fs.existsSync(manifestPath)) {
 	throw new Error('Cannot create .jpl: dist/manifest.json does not exist. Run the webpack build first.');
 }
@@ -42,9 +47,21 @@ if (files.length === 0) {
 	throw new Error('Cannot create .jpl: dist/ is empty.');
 }
 
-const archivePath = path.join(publishDir, `${manifest.id}.jpl`);
-if (fs.existsSync(archivePath)) {
-	fs.unlinkSync(archivePath);
+const publishBaseName = safeFileBaseName(manifest.name || manifest.id);
+const archivePath = path.join(publishDir, `${publishBaseName}.jpl`);
+const pluginInfoPath = path.join(publishDir, `${publishBaseName}.json`);
+
+const staleGeneratedPaths = [
+	archivePath,
+	pluginInfoPath,
+	path.join(publishDir, `${manifest.id}.jpl`),
+	path.join(publishDir, `${manifest.id}.json`),
+];
+
+for (const generatedPath of [...new Set(staleGeneratedPaths)]) {
+	if (fs.existsSync(generatedPath)) {
+		fs.unlinkSync(generatedPath);
+	}
 }
 
 tar.create(
@@ -63,5 +80,5 @@ const pluginInfo = {
 	_publish_hash: `sha256:${sha256(archivePath)}`,
 };
 
-fs.writeFileSync(path.join(publishDir, `${manifest.id}.json`), JSON.stringify(pluginInfo, null, '\t'), 'utf8');
+fs.writeFileSync(pluginInfoPath, JSON.stringify(pluginInfo, null, '\t'), 'utf8');
 console.info(`Plugin archive created at ${path.relative(rootDir, archivePath)}`);

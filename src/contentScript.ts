@@ -1,5 +1,10 @@
 import { Compartment, type Extension } from '@codemirror/state';
-import { liveMathEnabledFacet, liveMathLoadedAttribute, mathDecorationsField } from './mathDecorations';
+import {
+	liveMathClickHandler,
+	liveMathEnabledFacet,
+	liveMathLoadedAttribute,
+	mathDecorationsField,
+} from './mathDecorations';
 
 interface ContentScriptContext {
 	contentScriptId: string;
@@ -17,7 +22,7 @@ const getInitialSettings = async (context: ContentScriptContext): Promise<LiveMa
 			return { enableLiveMath: (settings as LiveMathSettings).enableLiveMath !== false };
 		}
 	} catch (error) {
-		console.warn('Joplin Live Math: failed to read settings; enabling by default', error);
+		console.warn('Joplin-Live-Math: failed to read settings; enabling by default', error);
 	}
 
 	return { enableLiveMath: true };
@@ -34,7 +39,7 @@ export default (context: ContentScriptContext) => ({
 				return [liveMathLoadedAttribute, liveMathEnabledFacet.of(false)];
 			}
 
-			return [liveMathLoadedAttribute, liveMathEnabledFacet.of(true), mathDecorationsField];
+			return [liveMathLoadedAttribute, liveMathEnabledFacet.of(true), liveMathClickHandler, mathDecorationsField];
 		};
 
 		const liveMathCompartment = new Compartment();
@@ -57,10 +62,10 @@ export default (context: ContentScriptContext) => ({
 				reconfigure(settings.enableLiveMath);
 			})
 			.catch(error => {
-				console.warn('Joplin Live Math: failed to apply settings after loading', error);
+				console.warn('Joplin-Live-Math: failed to apply settings after loading', error);
 			});
 
-		console.info('Joplin Live Math: CodeMirror 6 extension loaded');
+		console.info('Joplin-Live-Math: CodeMirror 6 extension loaded');
 	},
 
 	assets: () => [

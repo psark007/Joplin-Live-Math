@@ -7,6 +7,8 @@ export interface MathExpression {
 	contentFrom: number;
 	contentTo: number;
 	source: string;
+	block: boolean;
+	displayMode: boolean;
 }
 
 interface TextLine {
@@ -60,6 +62,40 @@ const intersects = (from: number, to: number, range: Range): boolean => from < r
 const isPositionInRanges = (position: number, ranges: Range[]): boolean =>
 	ranges.some(range => position >= range.from && position < range.to);
 
+const markdownContainerContentOffset = (lineText: string): { offset: number; hasMarkdownContainer: boolean } => {
+	let offset = 0;
+	let hasMarkdownContainer = false;
+
+	const leadingWhitespace = /^[ \t]*/.exec(lineText.slice(offset))?.[0] ?? '';
+	if (leadingWhitespace.length > 0) {
+		hasMarkdownContainer = true;
+		offset += leadingWhitespace.length;
+	}
+
+	while (lineText[offset] === '>') {
+		hasMarkdownContainer = true;
+		offset += 1;
+
+		if (lineText[offset] === ' ' || lineText[offset] === '\t') {
+			offset += 1;
+		}
+
+		const whitespace = /^[ \t]*/.exec(lineText.slice(offset))?.[0] ?? '';
+		offset += whitespace.length;
+	}
+
+	const listMarker = /^(?:[-+*]|\d{1,9}[.)])[ \t]+/.exec(lineText.slice(offset));
+	if (listMarker) {
+		hasMarkdownContainer = true;
+		offset += listMarker[0].length;
+	}
+
+	const trailingWhitespace = /^[ \t]*/.exec(lineText.slice(offset))?.[0] ?? '';
+	offset += trailingWhitespace.length;
+
+	return { offset, hasMarkdownContainer };
+};
+
 const lineStartsFence = (lineText: string) => {
 	const match = /^( {0,3})(`{3,}|~{3,})/.exec(lineText);
 	if (!match) {
@@ -103,12 +139,56 @@ const findFencedCodeRanges = (doc: string, lines: TextLine[]): Range[] => {
 	return ranges;
 };
 
-const isDisplayDelimiterLine = (line: TextLine, excludedRanges: Range[]): boolean => {
+const findDisplayDelimiterLine = (
+	line: TextLine,
+	excludedRanges: Range[]
+): { delimiterFrom: number; delimiterTo: number; block: boolean } | null => {
 	if (isPositionInRanges(line.from, excludedRanges)) {
-		return false;
+		return null;
 	}
 
-	return line.text.trim() === '$$';
+	const { offset, hasMarkdownContainer } = markdownContainerContentOffset(line.text);
+	if (!line.text.slice(offset).match(/^\$\$\s*$/)) {
+		return null;
+	}
+
+	const delimiterFrom = line.from + offset;
+
+	return {
+		delimiterFrom,
+		delimiterTo: delimiterFrom + 2,
+		block: !hasMarkdownContainer && offset === 0,
+	};
+};
+
+const stripBlockquotePrefix = (lineText: string): string => {
+	let text = lineText;
+
+	while (true) {
+		const match = /^(?:[ \t]{0,3}>[ \t]?)/.exec(text);
+		if (!match) {
+			return text;
+		}
+
+		text = text.slice(match[0].length);
+	}
+};
+
+const displaySourceFromLines = (lines: TextLine[]): string => {
+	const quoteStrippedLines = lines.map(line => stripBlockquotePrefix(line.text));
+	const contentLines = quoteStrippedLines.filter(line => line.trim().length > 0);
+	if (contentLines.length === 0) {
+		return '';
+	}
+
+	const commonIndent = Math.min(
+		...contentLines.map(line => (/^[ \t]*/.exec(line)?.[0].length ?? 0))
+	);
+
+	return quoteStrippedLines
+		.map(line => line.slice(Math.min(commonIndent, line.length)))
+		.join('\n')
+		.trim();
 };
 
 const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]): MathExpression[] => {
@@ -116,27 +196,33 @@ const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]
 
 	for (let index = 0; index < lines.length; index += 1) {
 		const opening = lines[index];
-		if (!isDisplayDelimiterLine(opening, excludedRanges)) {
+		const openingDelimiter = findDisplayDelimiterLine(opening, excludedRanges);
+		if (!openingDelimiter) {
 			continue;
 		}
 
 		for (let closeIndex = index + 1; closeIndex < lines.length; closeIndex += 1) {
 			const closing = lines[closeIndex];
-			if (!isDisplayDelimiterLine(closing, excludedRanges)) {
+			const closingDelimiter = findDisplayDelimiterLine(closing, excludedRanges);
+			if (!closingDelimiter) {
 				continue;
 			}
 
 			const contentFrom = opening.to < doc.length ? opening.to + 1 : opening.to;
 			const contentTo = closing.from;
-			const source = doc.slice(contentFrom, contentTo).trim();
+			const source = displaySourceFromLines(lines.slice(index + 1, closeIndex));
 			if (source.length > 0) {
+				const block = openingDelimiter.block && closingDelimiter.block;
+
 				expressions.push({
 					kind: 'display',
-					from: opening.from,
-					to: closing.to,
+					from: block ? opening.from : openingDelimiter.delimiterFrom,
+					to: block ? closing.to : closingDelimiter.delimiterTo,
 					contentFrom,
 					contentTo,
 					source,
+					block,
+					displayMode: block,
 				});
 			}
 
@@ -200,13 +286,70 @@ const nextNonExcludedPosition = (position: number, ranges: Range[]): number => {
 	return containingRange ? containingRange.to : position;
 };
 
+const isDoubleDollarDelimiter = (doc: string, index: number): boolean =>
+	doc[index] === '$' && doc[index + 1] === '$' && !isEscaped(doc, index);
+
+const findInlineDisplayMathInLine = (doc: string, line: TextLine, excludedRanges: Range[]): MathExpression[] => {
+	const expressions: MathExpression[] = [];
+	let index = line.from;
+
+	while (index < line.to - 1) {
+		const nextPosition = nextNonExcludedPosition(index, excludedRanges);
+		if (nextPosition !== index) {
+			index = nextPosition;
+			continue;
+		}
+
+		if (!isDoubleDollarDelimiter(doc, index)) {
+			index += 1;
+			continue;
+		}
+
+		let closeIndex = index + 2;
+		while (closeIndex < line.to - 1) {
+			const nextClosePosition = nextNonExcludedPosition(closeIndex, excludedRanges);
+			if (nextClosePosition !== closeIndex) {
+				closeIndex = nextClosePosition;
+				continue;
+			}
+
+			if (isDoubleDollarDelimiter(doc, closeIndex)) {
+				const source = doc.slice(index + 2, closeIndex).trim();
+				if (source.length > 0) {
+					expressions.push({
+						kind: 'display',
+						from: index,
+						to: closeIndex + 2,
+						contentFrom: index + 2,
+						contentTo: closeIndex,
+						source,
+						block: false,
+						displayMode: false,
+					});
+				}
+
+				index = closeIndex + 2;
+				break;
+			}
+
+			closeIndex += 1;
+		}
+
+		if (closeIndex >= line.to - 1) {
+			index += 2;
+		}
+	}
+
+	return expressions;
+};
+
 const isInlineOpeningDollar = (doc: string, index: number): boolean => {
 	const next = doc[index + 1];
 	if (doc[index] !== '$' || next === undefined || next === '$' || isEscaped(doc, index)) {
 		return false;
 	}
 
-	if (/\s|\d/.test(next)) {
+	if (/\d/.test(next)) {
 		return false;
 	}
 
@@ -218,10 +361,6 @@ const isInlineClosingDollar = (doc: string, index: number): boolean => {
 	const next = doc[index + 1];
 
 	if (doc[index] !== '$' || previous === undefined || previous === '$' || isEscaped(doc, index)) {
-		return false;
-	}
-
-	if (/\s/.test(previous)) {
 		return false;
 	}
 
@@ -262,6 +401,8 @@ const findInlineMathInLine = (doc: string, line: TextLine, excludedRanges: Range
 						contentFrom: index + 1,
 						contentTo: closeIndex,
 						source,
+						block: false,
+						displayMode: false,
 					});
 				}
 
@@ -285,14 +426,23 @@ export const findMathExpressions = (doc: string): MathExpression[] => {
 	const fencedCodeRanges = findFencedCodeRanges(doc, lines);
 	const displayExpressions = findDisplayMath(doc, lines, fencedCodeRanges);
 	const displayRanges = displayExpressions.map(({ from, to }) => ({ from, to }));
-	const inlineExcludedRanges = [...fencedCodeRanges, ...displayRanges];
+	const inlineDisplayExpressions: MathExpression[] = [];
+
+	for (const line of lines) {
+		inlineDisplayExpressions.push(
+			...findInlineDisplayMathInLine(doc, line, [
+				...fencedCodeRanges,
+				...displayRanges,
+				...findInlineCodeRangesInLine(line),
+			])
+		);
+	}
+
+	const inlineDisplayRanges = inlineDisplayExpressions.map(({ from, to }) => ({ from, to }));
+	const inlineExcludedRanges = [...fencedCodeRanges, ...displayRanges, ...inlineDisplayRanges];
 	const inlineExpressions: MathExpression[] = [];
 
 	for (const line of lines) {
-		if (inlineExcludedRanges.some(range => intersects(line.from, line.to, range))) {
-			continue;
-		}
-
 		inlineExpressions.push(
 			...findInlineMathInLine(doc, line, [
 				...inlineExcludedRanges,
@@ -301,5 +451,5 @@ export const findMathExpressions = (doc: string): MathExpression[] => {
 		);
 	}
 
-	return [...displayExpressions, ...inlineExpressions].sort((a, b) => a.from - b.from);
+	return [...displayExpressions, ...inlineDisplayExpressions, ...inlineExpressions].sort((a, b) => a.from - b.from);
 };
