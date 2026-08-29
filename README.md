@@ -25,6 +25,12 @@ Inline math:
 Let $X \sim N(0,1)$.
 ```
 
+Pure math inside inline code spans is also rendered, which helps with existing notes that wrapped TeX in backticks:
+
+```markdown
+`$x=y$`
+```
+
 Display math:
 
 ```markdown
@@ -33,14 +39,22 @@ E[X^2] = 1
 $$
 ```
 
-Display math can use standalone delimiter lines or same-line `$$...$$` syntax. Display math nested in Markdown containers such as blockquotes and list items uses inline editor layout so it stays aligned with the surrounding Markdown.
+Display math can use standalone delimiter lines, same-line `$$...$$` syntax, or multiline content beside the delimiters:
+
+```markdown
+$$L = \begin{pmatrix}
+x & y
+\end{pmatrix}$$
+```
+
+Display math nested in Markdown containers such as blockquotes and list items uses inline editor layout so it stays aligned with the surrounding Markdown.
 
 ## Behavior
 
 - Math renders with KaTeX when the cursor and selection are outside the expression.
 - The original `$...$` or `$$...$$` source is shown when the cursor or selection intersects the expression.
 - Escaped dollars such as `\$` are ignored.
-- Fenced code blocks and inline code spans are ignored.
+- Fenced code blocks and mixed inline code spans are ignored.
 - Malformed or incomplete math is left as source.
 - The Markdown document is never modified by the preview.
 

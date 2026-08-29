@@ -22,6 +22,12 @@ interface Range {
 	to: number;
 }
 
+interface InlineCodeSpan extends Range {
+	contentFrom: number;
+	contentTo: number;
+	text: string;
+}
+
 const lineIterator = (doc: string): TextLine[] => {
 	const lines: TextLine[] = [];
 	let lineStart = 0;
@@ -57,10 +63,10 @@ const isEscaped = (doc: string, index: number): boolean => {
 	return slashCount % 2 === 1;
 };
 
-const intersects = (from: number, to: number, range: Range): boolean => from < range.to && range.from < to;
-
 const isPositionInRanges = (position: number, ranges: Range[]): boolean =>
 	ranges.some(range => position >= range.from && position < range.to);
+
+const intersects = (left: Range, right: Range): boolean => left.from < right.to && right.from < left.to;
 
 const markdownContainerContentOffset = (lineText: string): { offset: number; hasMarkdownContainer: boolean } => {
 	let offset = 0;
@@ -174,8 +180,8 @@ const stripBlockquotePrefix = (lineText: string): string => {
 	}
 };
 
-const displaySourceFromLines = (lines: TextLine[]): string => {
-	const quoteStrippedLines = lines.map(line => stripBlockquotePrefix(line.text));
+const displaySourceFromText = (text: string): string => {
+	const quoteStrippedLines = text.split('\n').map(stripBlockquotePrefix);
 	const contentLines = quoteStrippedLines.filter(line => line.trim().length > 0);
 	if (contentLines.length === 0) {
 		return '';
@@ -190,6 +196,9 @@ const displaySourceFromLines = (lines: TextLine[]): string => {
 		.join('\n')
 		.trim();
 };
+
+const displaySourceFromLines = (lines: TextLine[]): string =>
+	displaySourceFromText(lines.map(line => line.text).join('\n'));
 
 const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]): MathExpression[] => {
 	const expressions: MathExpression[] = [];
@@ -234,8 +243,8 @@ const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]
 	return expressions;
 };
 
-const findInlineCodeRangesInLine = (line: TextLine): Range[] => {
-	const ranges: Range[] = [];
+const findInlineCodeSpansInLine = (line: TextLine): InlineCodeSpan[] => {
+	const spans: InlineCodeSpan[] = [];
 	let index = 0;
 
 	while (index < line.text.length) {
@@ -262,9 +271,12 @@ const findInlineCodeRangesInLine = (line: TextLine): Range[] => {
 			}
 
 			if (closeTickCount === tickCount) {
-				ranges.push({
+				spans.push({
 					from: line.from + index,
+					contentFrom: line.from + index + tickCount,
+					contentTo: line.from + closeIndex,
 					to: line.from + closeIndex + tickCount,
+					text: line.text.slice(index + tickCount, closeIndex),
 				});
 				index = closeIndex + tickCount;
 				break;
@@ -278,7 +290,7 @@ const findInlineCodeRangesInLine = (line: TextLine): Range[] => {
 		}
 	}
 
-	return ranges;
+	return spans;
 };
 
 const nextNonExcludedPosition = (position: number, ranges: Range[]): number => {
@@ -288,6 +300,179 @@ const nextNonExcludedPosition = (position: number, ranges: Range[]): number => {
 
 const isDoubleDollarDelimiter = (doc: string, index: number): boolean =>
 	doc[index] === '$' && doc[index + 1] === '$' && !isEscaped(doc, index);
+
+const findDoubleDollarInLine = (
+	doc: string,
+	line: TextLine,
+	from: number,
+	excludedRanges: Range[]
+): number | null => {
+	let position = Math.max(from, line.from);
+
+	while (position < line.to - 1) {
+		const nextPosition = nextNonExcludedPosition(position, excludedRanges);
+		if (nextPosition !== position) {
+			position = nextPosition;
+			continue;
+		}
+
+		if (isDoubleDollarDelimiter(doc, position)) {
+			return position;
+		}
+
+		position += 1;
+	}
+
+	return null;
+};
+
+const isTopLevelMultilineDisplayBlock = (
+	opening: TextLine,
+	openingDelimiterFrom: number,
+	closing: TextLine,
+	closingDelimiterFrom: number
+): boolean => {
+	const openingOffset = openingDelimiterFrom - opening.from;
+	const openingContainer = markdownContainerContentOffset(opening.text);
+
+	if (openingContainer.hasMarkdownContainer || openingOffset !== 0) {
+		return false;
+	}
+
+	const closingOffset = closingDelimiterFrom - closing.from;
+	return closing.text.slice(closingOffset + 2).trim().length === 0;
+};
+
+const findMultilineDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]): MathExpression[] => {
+	const expressions: MathExpression[] = [];
+
+	for (let index = 0; index < lines.length; index += 1) {
+		const opening = lines[index];
+		let searchFrom = opening.from;
+
+		while (searchFrom < opening.to - 1) {
+			const openingDelimiterFrom = findDoubleDollarInLine(doc, opening, searchFrom, excludedRanges);
+			if (openingDelimiterFrom === null) {
+				break;
+			}
+
+			const sameLineClosingDelimiter = findDoubleDollarInLine(
+				doc,
+				opening,
+				openingDelimiterFrom + 2,
+				excludedRanges
+			);
+			if (sameLineClosingDelimiter !== null) {
+				searchFrom = sameLineClosingDelimiter + 2;
+				continue;
+			}
+
+			for (let closeIndex = index + 1; closeIndex < lines.length; closeIndex += 1) {
+				const closing = lines[closeIndex];
+				const closingDelimiterFrom = findDoubleDollarInLine(doc, closing, closing.from, excludedRanges);
+				if (closingDelimiterFrom === null) {
+					continue;
+				}
+
+				const contentFrom = openingDelimiterFrom + 2;
+				const contentTo = closingDelimiterFrom;
+				const source = displaySourceFromText(doc.slice(contentFrom, contentTo));
+				if (source.length > 0) {
+					const block = isTopLevelMultilineDisplayBlock(
+						opening,
+						openingDelimiterFrom,
+						closing,
+						closingDelimiterFrom
+					);
+
+					expressions.push({
+						kind: 'display',
+						from: block ? opening.from : openingDelimiterFrom,
+						to: block ? closing.to : closingDelimiterFrom + 2,
+						contentFrom,
+						contentTo,
+						source,
+						block,
+						displayMode: block,
+					});
+				}
+
+				index = closeIndex;
+				searchFrom = opening.to;
+				break;
+			}
+
+			if (searchFrom < opening.to) {
+				searchFrom = openingDelimiterFrom + 2;
+			}
+		}
+	}
+
+	return expressions;
+};
+
+const expressionFromInlineCodeSpan = (span: InlineCodeSpan): MathExpression | null => {
+	const leadingWhitespace = /^[ \t]*/.exec(span.text)?.[0].length ?? 0;
+	const trailingWhitespace = /[ \t]*$/.exec(span.text)?.[0].length ?? 0;
+	const trimmedFrom = span.contentFrom + leadingWhitespace;
+	const trimmedTo = span.contentTo - trailingWhitespace;
+	const text = span.text.slice(leadingWhitespace, span.text.length - trailingWhitespace);
+
+	if (text.startsWith('$$') && text.endsWith('$$') && text.length > 4) {
+		const source = text.slice(2, -2).trim();
+		if (source.length === 0) {
+			return null;
+		}
+
+		return {
+			kind: 'display',
+			from: span.from,
+			to: span.to,
+			contentFrom: trimmedFrom + 2,
+			contentTo: trimmedTo - 2,
+			source,
+			block: false,
+			displayMode: false,
+		};
+	}
+
+	if (text.startsWith('$') && text.endsWith('$') && !text.startsWith('$$') && text.length > 2) {
+		const source = text.slice(1, -1).trim();
+		if (source.length === 0) {
+			return null;
+		}
+
+		return {
+			kind: 'inline',
+			from: span.from,
+			to: span.to,
+			contentFrom: trimmedFrom + 1,
+			contentTo: trimmedTo - 1,
+			source,
+			block: false,
+			displayMode: false,
+		};
+	}
+
+	return null;
+};
+
+const findInlineCodeMath = (spans: InlineCodeSpan[], excludedRanges: Range[]): MathExpression[] => {
+	const expressions: MathExpression[] = [];
+
+	for (const span of spans) {
+		if (excludedRanges.some(range => intersects(span, range))) {
+			continue;
+		}
+
+		const expression = expressionFromInlineCodeSpan(span);
+		if (expression) {
+			expressions.push(expression);
+		}
+	}
+
+	return expressions;
+};
 
 const findInlineDisplayMathInLine = (doc: string, line: TextLine, excludedRanges: Range[]): MathExpression[] => {
 	const expressions: MathExpression[] = [];
@@ -343,13 +528,30 @@ const findInlineDisplayMathInLine = (doc: string, line: TextLine, excludedRanges
 	return expressions;
 };
 
+const isFollowedByWhitespaceThenDigit = (doc: string, index: number): boolean => {
+	const next = doc[index + 1];
+	if (next !== ' ' && next !== '\t') {
+		return false;
+	}
+
+	let position = index + 1;
+	while (position < doc.length && (doc[position] === ' ' || doc[position] === '\t')) {
+		position += 1;
+	}
+
+	const char = doc[position];
+	return char !== undefined && char >= '0' && char <= '9';
+};
+
 const isInlineOpeningDollar = (doc: string, index: number): boolean => {
 	const next = doc[index + 1];
 	if (doc[index] !== '$' || next === undefined || next === '$' || isEscaped(doc, index)) {
 		return false;
 	}
 
-	if (/\d/.test(next)) {
+	// A "$" directly followed by whitespace and then a digit is almost always a
+	// currency amount (e.g. "$ 5"), not the start of an inline expression.
+	if (isFollowedByWhitespaceThenDigit(doc, index)) {
 		return false;
 	}
 
@@ -361,6 +563,12 @@ const isInlineClosingDollar = (doc: string, index: number): boolean => {
 	const next = doc[index + 1];
 
 	if (doc[index] !== '$' || previous === undefined || previous === '$' || isEscaped(doc, index)) {
+		return false;
+	}
+
+	// Similarly, a "$" followed by whitespace then a digit closes a currency
+	// amount (e.g. "and $ 5") rather than an inline expression.
+	if (isFollowedByWhitespaceThenDigit(doc, index)) {
 		return false;
 	}
 
@@ -426,6 +634,19 @@ export const findMathExpressions = (doc: string): MathExpression[] => {
 	const fencedCodeRanges = findFencedCodeRanges(doc, lines);
 	const displayExpressions = findDisplayMath(doc, lines, fencedCodeRanges);
 	const displayRanges = displayExpressions.map(({ from, to }) => ({ from, to }));
+	const inlineCodeSpans = lines.flatMap(findInlineCodeSpansInLine);
+	const inlineCodeRanges = inlineCodeSpans.map(({ from, to }) => ({ from, to }));
+	const multilineDisplayExpressions = findMultilineDisplayMath(doc, lines, [
+		...fencedCodeRanges,
+		...displayRanges,
+		...inlineCodeRanges,
+	]);
+	const multilineDisplayRanges = multilineDisplayExpressions.map(({ from, to }) => ({ from, to }));
+	const inlineCodeExpressions = findInlineCodeMath(inlineCodeSpans, [
+		...fencedCodeRanges,
+		...displayRanges,
+		...multilineDisplayRanges,
+	]);
 	const inlineDisplayExpressions: MathExpression[] = [];
 
 	for (const line of lines) {
@@ -433,23 +654,36 @@ export const findMathExpressions = (doc: string): MathExpression[] => {
 			...findInlineDisplayMathInLine(doc, line, [
 				...fencedCodeRanges,
 				...displayRanges,
-				...findInlineCodeRangesInLine(line),
+				...multilineDisplayRanges,
+				...inlineCodeRanges,
 			])
 		);
 	}
 
 	const inlineDisplayRanges = inlineDisplayExpressions.map(({ from, to }) => ({ from, to }));
-	const inlineExcludedRanges = [...fencedCodeRanges, ...displayRanges, ...inlineDisplayRanges];
+	const inlineExcludedRanges = [
+		...fencedCodeRanges,
+		...displayRanges,
+		...multilineDisplayRanges,
+		...inlineDisplayRanges,
+		...inlineCodeRanges,
+	];
 	const inlineExpressions: MathExpression[] = [];
 
 	for (const line of lines) {
 		inlineExpressions.push(
 			...findInlineMathInLine(doc, line, [
 				...inlineExcludedRanges,
-				...findInlineCodeRangesInLine(line),
 			])
 		);
 	}
 
-	return [...displayExpressions, ...inlineDisplayExpressions, ...inlineExpressions].sort((a, b) => a.from - b.from);
+	return [
+		...displayExpressions,
+		...multilineDisplayExpressions,
+		...inlineCodeExpressions,
+		...inlineDisplayExpressions,
+		...inlineExpressions,
+	]
+		.sort((a, b) => a.from - b.from);
 };

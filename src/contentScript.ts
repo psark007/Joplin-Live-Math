@@ -1,4 +1,4 @@
-import { Compartment, type Extension } from '@codemirror/state';
+import { Compartment, type Extension, type StateEffect } from '@codemirror/state';
 import {
 	liveMathClickHandler,
 	liveMathEnabledFacet,
@@ -9,6 +9,14 @@ import {
 interface ContentScriptContext {
 	contentScriptId: string;
 	postMessage: (message: unknown) => Promise<unknown>;
+}
+
+interface CodeMirrorWrapper {
+	cm6: {
+		dispatch: (transaction: { effects: StateEffect<unknown> }) => void;
+	};
+	addExtension: (extension: Extension) => void;
+	registerCommand?: (name: string, callback: (enabled: boolean) => void) => void;
 }
 
 interface LiveMathSettings {
@@ -29,7 +37,7 @@ const getInitialSettings = async (context: ContentScriptContext): Promise<LiveMa
 };
 
 export default (context: ContentScriptContext) => ({
-	plugin: (codeMirrorWrapper: any) => {
+	plugin: (codeMirrorWrapper: CodeMirrorWrapper) => {
 		if (!codeMirrorWrapper.cm6) {
 			return;
 		}

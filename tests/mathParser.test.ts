@@ -11,6 +11,15 @@ describe('findMathExpressions', () => {
 		]);
 	});
 
+	it('finds inline equality expressions', () => {
+		expect(findMathExpressions('$x=y$')).toEqual([
+			expect.objectContaining({
+				kind: 'inline',
+				source: 'x=y',
+			}),
+		]);
+	});
+
 	it('finds multiple inline expressions', () => {
 		const expressions = findMathExpressions('Two: $x$ and $y$.');
 		expect(expressions.map(expression => expression.source)).toEqual(['x', 'y']);
@@ -30,12 +39,52 @@ describe('findMathExpressions', () => {
 		expect(findMathExpressions('Price: $20')).toEqual([]);
 	});
 
+	it('renders math that begins with a digit', () => {
+		expect(findMathExpressions('$2x + 1$')).toEqual([
+			expect.objectContaining({
+				kind: 'inline',
+				source: '2x + 1',
+			}),
+		]);
+	});
+
+	it('does not treat spaced currency as math', () => {
+		expect(findMathExpressions('It costs $ 5 to $ 10')).toEqual([]);
+	});
+
+	it('does not treat a spaced currency amount as a closing delimiter', () => {
+		expect(findMathExpressions('$x$ and $ 5')).toEqual([
+			expect.objectContaining({
+				kind: 'inline',
+				source: 'x',
+			}),
+		]);
+	});
+
 	it('ignores escaped dollars', () => {
 		expect(findMathExpressions('Escaped: \\$20 and \\$x\\$')).toEqual([]);
 	});
 
-	it('ignores inline code spans', () => {
-		expect(findMathExpressions('Code: `$x^2$`')).toEqual([]);
+	it('renders inline code spans that contain only math', () => {
+		expect(findMathExpressions('Code: `$x=y$`')).toEqual([
+			expect.objectContaining({
+				kind: 'inline',
+				source: 'x=y',
+			}),
+		]);
+	});
+
+	it('renders spaced inline code spans that contain only math', () => {
+		expect(findMathExpressions('Code: ` $x=y$ `')).toEqual([
+			expect.objectContaining({
+				kind: 'inline',
+				source: 'x=y',
+			}),
+		]);
+	});
+
+	it('ignores mixed inline code spans', () => {
+		expect(findMathExpressions('Code: `const formula = "$x^2$"`')).toEqual([]);
 	});
 
 	it('ignores fenced code blocks', () => {
@@ -68,11 +117,49 @@ describe('findMathExpressions', () => {
 		]);
 	});
 
+	it('finds multiline display math with content beside delimiters', () => {
+		const doc = String.raw`$$L = \begin{pmatrix}
+\ell_{11} & 0 & 0 & \cdots & 0 \\
+\ell_{21} & \ell_{22} & 0 & \cdots & 0 \\
+\ell_{31} & \ell_{32} & \ell_{33} & \cdots & 0 \\
+\vdots & \vdots & \vdots & \ddots & \vdots \\
+\ell_{n1} & \ell_{n2} & \ell_{n3} & \cdots & \ell_{nn}
+\end{pmatrix}$$`;
+
+		expect(findMathExpressions(doc)).toEqual([
+			expect.objectContaining({
+				kind: 'display',
+				source: expect.stringContaining(String.raw`L = \begin{pmatrix}`),
+				block: true,
+				displayMode: true,
+			}),
+		]);
+	});
+
 	it('finds same-line double-dollar math as inline-layout math', () => {
 		expect(findMathExpressions('> An equation $$ x + y $$ here')).toEqual([
 			expect.objectContaining({
 				kind: 'display',
 				source: 'x + y',
+				block: false,
+				displayMode: false,
+			}),
+		]);
+	});
+
+	it('finds multiline display math with content beside delimiters inside blockquotes', () => {
+		const doc = [
+			String.raw`> $$L = \begin{pmatrix}`,
+			'> x & y',
+			String.raw`> \end{pmatrix}$$`,
+		].join('\n');
+
+		expect(findMathExpressions(doc)).toEqual([
+			expect.objectContaining({
+				kind: 'display',
+				source: String.raw`L = \begin{pmatrix}
+x & y
+\end{pmatrix}`,
 				block: false,
 				displayMode: false,
 			}),

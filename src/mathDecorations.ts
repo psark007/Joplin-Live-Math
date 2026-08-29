@@ -4,6 +4,7 @@ import { findMathExpressions, type MathExpression } from './mathParser';
 import { MathWidget } from './mathWidget';
 
 interface MathDecorationState {
+	expressions: MathExpression[];
 	decorations: DecorationSet;
 }
 
@@ -108,13 +109,12 @@ const addDisplaySourceLineDecorations = (
 	}
 };
 
-const buildMathDecorations = (state: EditorState): MathDecorationState => {
+const buildDecorations = (state: EditorState, expressions: MathExpression[]): DecorationSet => {
 	if (!state.facet(liveMathEnabledFacet)) {
-		return { decorations: Decoration.none };
+		return Decoration.none;
 	}
 
 	const builder = new RangeSetBuilder<Decoration>();
-	const expressions = findMathExpressions(state.doc.toString());
 
 	for (const expression of expressions) {
 		if (selectionTouchesExpression(state, expression)) {
@@ -146,14 +146,40 @@ const buildMathDecorations = (state: EditorState): MathDecorationState => {
 		);
 	}
 
-	return { decorations: builder.finish() };
+	return builder.finish();
+};
+
+const parseExpressions = (state: EditorState): MathExpression[] =>
+	findMathExpressions(state.doc.toString());
+
+const recompute = (state: EditorState): MathDecorationState => {
+	if (!state.facet(liveMathEnabledFacet)) {
+		return { expressions: [], decorations: Decoration.none };
+	}
+
+	const expressions = parseExpressions(state);
+	return { expressions, decorations: buildDecorations(state, expressions) };
 };
 
 export const mathDecorationsField = StateField.define<MathDecorationState>({
-	create: buildMathDecorations,
+	create: recompute,
 	update: (value, transaction) => {
-		if (transaction.docChanged || transaction.selection || transaction.reconfigured) {
-			return buildMathDecorations(transaction.state);
+		if (transaction.docChanged) {
+			return recompute(transaction.state);
+		}
+
+		if (transaction.selection) {
+			// The document is unchanged, so the parsed expressions (and their
+			// absolute positions) are still valid. Only the selection-sensitive
+			// source-vs-widget decision needs recomputing, so skip re-parsing.
+			return {
+				expressions: value.expressions,
+				decorations: buildDecorations(transaction.state, value.expressions),
+			};
+		}
+
+		if (transaction.reconfigured) {
+			return recompute(transaction.state);
 		}
 
 		return value;
