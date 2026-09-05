@@ -90,6 +90,56 @@ const selectionTouchesExpression = (state: EditorState, expression: MathExpressi
 	return false;
 };
 
+// CodeMirror requires that any `Decoration.replace` (or `Decoration.mark`,
+// for the purposes of picking a reveal style below) whose range crosses a
+// hard line break be treated as a block-level decoration. Our parser's
+// `block`/`displayMode` fields describe *styling intent* (should this look
+// like a centred, top-level display block, e.g. based on whether it's
+// nested inside a list item or blockquote) -- that's a different question
+// from whether the range is structurally allowed to be inline. An
+// expression sitting inside a list item can still span multiple physical
+// lines (open "$$" line, content line(s), close "$$" line), and marking
+// that kind of range as an inline (`block: false`) replace decoration is
+// invalid: CodeMirror renders each line as its own DOM node, so an inline
+// element cannot stretch across several of them. Doing so anyway doesn't
+// throw, but silently produces mispositioned/overlapping output -- the
+// widget effectively anchors at the start of the line box, ignoring the
+// list/blockquote indentation, instead of flowing after the marker.
+//
+// So: always force `block: true` when the range crosses a line break,
+// regardless of the parser's styling-only `block` flag.
+const spansMultipleLines = (state: EditorState, expression: MathExpression): boolean => {
+	const to = Math.max(expression.from, expression.to - 1);
+	return state.doc.lineAt(expression.from).number !== state.doc.lineAt(to).number;
+};
+
+const visualColumns = (text: string): number => {
+	let columns = 0;
+
+	for (const character of text) {
+		if (character === '\t') {
+			columns += 4 - (columns % 4);
+		} else {
+			columns += 1;
+		}
+	}
+
+	return columns;
+};
+
+const blockIndentColumns = (
+	state: EditorState,
+	expression: MathExpression,
+	mustRenderAsBlock: boolean
+): number => {
+	if (!mustRenderAsBlock) {
+		return 0;
+	}
+
+	const line = state.doc.lineAt(expression.from);
+	return visualColumns(line.text.slice(0, expression.from - line.from));
+};
+
 const addDisplaySourceLineDecorations = (
 	state: EditorState,
 	expression: MathExpression,
@@ -117,8 +167,13 @@ const buildDecorations = (state: EditorState, expressions: MathExpression[]): De
 	const builder = new RangeSetBuilder<Decoration>();
 
 	for (const expression of expressions) {
+		// Structural requirement (see `spansMultipleLines` above) -- distinct
+		// from `expression.block`/`expression.displayMode`, which only capture
+		// styling intent.
+		const mustRenderAsBlock = expression.block || spansMultipleLines(state, expression);
+
 		if (selectionTouchesExpression(state, expression)) {
-			if (expression.block) {
+			if (mustRenderAsBlock) {
 				addDisplaySourceLineDecorations(state, expression, builder);
 			} else {
 				builder.add(
@@ -137,11 +192,12 @@ const buildDecorations = (state: EditorState, expressions: MathExpression[]): De
 			Decoration.replace({
 				widget: new MathWidget(
 					expression.source,
-					expression.displayMode,
+					expression.displayMode || mustRenderAsBlock,
 					expression.contentFrom,
-					expression.contentTo
+					expression.contentTo,
+					blockIndentColumns(state, expression, mustRenderAsBlock)
 				),
-				block: expression.block,
+				block: mustRenderAsBlock,
 			})
 		);
 	}

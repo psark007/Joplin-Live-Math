@@ -1,6 +1,6 @@
 {
 	"name": "joplin-plugin-live-math",
-	"version": "0.1.10",
+	"version": "0.1.14",
 	"description": "Obsidian-style live KaTeX preview for Joplin's CodeMirror 6 Markdown editor.",
 	"main": "dist/index.js",
 	"homepage": "https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math",

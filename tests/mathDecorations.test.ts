@@ -7,6 +7,7 @@ interface DecoratedRange {
 	to: number;
 	hasWidget: boolean;
 	block: boolean;
+	indentColumns: number;
 	className?: string;
 }
 
@@ -16,11 +17,14 @@ const collectFromState = (state: EditorState): DecoratedRange[] => {
 	const decorationSet = state.field(mathDecorationsField).decorations;
 
 	decorationSet.between(0, state.doc.length, (from: number, to: number, value: any) => {
+		const widget = value.spec.widget as any;
+
 		ranges.push({
 			from,
 			to,
-			hasWidget: !!value.spec.widget,
+			hasWidget: !!widget,
 			block: value.spec.block === true,
+			indentColumns: widget?.indentColumns ?? 0,
 			className: value.spec.class,
 		});
 	});
@@ -67,7 +71,7 @@ describe('math decorations', () => {
 
 	it('uses block layout for top-level display math', () => {
 		expect(collectDecorations('$$\nx^2\n$$', 9)).toEqual([
-			expect.objectContaining({ hasWidget: true, block: true }),
+			expect.objectContaining({ hasWidget: true, block: true, indentColumns: 0 }),
 		]);
 	});
 
@@ -77,19 +81,41 @@ x & y
 \end{pmatrix}$$`;
 
 		expect(collectDecorations(doc, doc.length)).toEqual([
-			expect.objectContaining({ hasWidget: true, block: true }),
+			expect.objectContaining({ hasWidget: true, block: true, indentColumns: 0 }),
 		]);
 	});
 
-	it('uses inline layout for list-contained display math', () => {
+	it('keeps block math visually indented inside a bullet list', () => {
+		// Even though this math is only "list-contained" (not top-level) as far
+		// as styling intent goes, CodeMirror requires block:true for any
+		// replace decoration whose range crosses a line break -- marking it
+		// block:false here would silently misposition the rendered widget.
 		expect(collectDecorations('- $$\n  x^2\n  $$', 0)).toEqual([
-			expect.objectContaining({ hasWidget: true, block: false }),
+			expect.objectContaining({ hasWidget: true, block: true, indentColumns: 2 }),
+		]);
+	});
+
+	it('keeps block math visually indented inside a numbered list', () => {
+		expect(collectDecorations('1. $$\n   x^2\n   $$', 0)).toEqual([
+			expect.objectContaining({ hasWidget: true, block: true, indentColumns: 3 }),
+		]);
+	});
+
+	it('uses block layout for blockquote-contained multiline display math', () => {
+		const doc = [
+			String.raw`> $$L = \begin{pmatrix}`,
+			'> x & y',
+			String.raw`> \end{pmatrix}$$`,
+		].join('\n');
+
+		expect(collectDecorations(doc, 0)).toEqual([
+			expect.objectContaining({ hasWidget: true, block: true, indentColumns: 2 }),
 		]);
 	});
 
 	it('uses inline layout for same-line double-dollar math', () => {
 		expect(collectDecorations('> An equation $$ x^2 $$ here', 0)).toEqual([
-			expect.objectContaining({ hasWidget: true, block: false }),
+			expect.objectContaining({ hasWidget: true, block: false, indentColumns: 0 }),
 		]);
 	});
 
@@ -120,5 +146,33 @@ x & y
 				className: 'joplin-live-math-source-inline',
 			}),
 		]);
+	});
+
+	it('never marks a widget decoration block:false when its range crosses a line break', () => {
+		// Regression guard: CodeMirror's Decoration.replace requires block:true
+		// whenever the decorated range spans a line break, regardless of the
+		// parser's own styling-only "block"/"displayMode" flags. Violating this
+		// doesn't throw -- it silently mispositions the rendered widget -- so
+		// this is checked explicitly rather than relying on a thrown error.
+		const docs = [
+			'- $$\n  x^2\n  $$',
+			'1. $$\n   x^2\n   $$',
+			['> $$L = \\begin{pmatrix}', '> x & y', '> \\end{pmatrix}$$'].join('\n'),
+			'$$\nx^2\n$$',
+		];
+
+		for (const doc of docs) {
+			const decorations = collectDecorations(doc, 0);
+			for (const decoration of decorations.filter(d => d.hasWidget)) {
+				const [from, to] = [decoration.from, decoration.to];
+				const state = EditorState.create({ doc });
+				const crossesLineBreak = state.doc.lineAt(from).number !==
+					state.doc.lineAt(Math.max(from, to - 1)).number;
+
+				if (crossesLineBreak) {
+					expect(decoration.block).toBe(true);
+				}
+			}
+		}
 	});
 });

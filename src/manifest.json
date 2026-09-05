@@ -2,7 +2,7 @@
 	"manifest_version": 1,
 	"id": "com.github.psark007.live-math-joplin",
 	"app_min_version": "3.1",
-	"version": "0.1.10",
+	"version": "0.1.14",
 	"name": "Joplin-Live-Math",
 	"description": "Render LaTeX/KaTeX math directly in Joplin's CodeMirror 6 Markdown editor when the expression is not being edited.",
 	"author": "Pawel",

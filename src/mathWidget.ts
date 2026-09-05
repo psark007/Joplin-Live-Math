@@ -6,7 +6,8 @@ export class MathWidget extends WidgetType {
 		private readonly source: string,
 		private readonly displayMode: boolean,
 		private readonly contentFrom: number,
-		private readonly contentTo: number
+		private readonly contentTo: number,
+		private readonly indentColumns = 0
 	) {
 		super();
 	}
@@ -16,7 +17,8 @@ export class MathWidget extends WidgetType {
 			other.source === this.source &&
 			other.displayMode === this.displayMode &&
 			other.contentFrom === this.contentFrom &&
-			other.contentTo === this.contentTo
+			other.contentTo === this.contentTo &&
+			other.indentColumns === this.indentColumns
 		);
 	}
 
@@ -27,6 +29,8 @@ export class MathWidget extends WidgetType {
 		container.setAttribute('data-joplin-live-math-widget', 'true');
 		container.setAttribute('data-joplin-live-math-content-from', String(this.contentFrom));
 		container.setAttribute('data-joplin-live-math-content-to', String(this.contentTo));
+		container.setAttribute('data-joplin-live-math-indent-columns', String(this.indentColumns));
+		container.style.setProperty('--joplin-live-math-indent-width', `${this.indentColumns}ch`);
 
 		try {
 			katex.render(this.source, container, {
