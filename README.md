@@ -1,45 +1,63 @@
 # Joplin-Live-Math
 
-Joplin-Live-Math renders LaTeX math directly inside Joplin's CodeMirror 6 Markdown editor when the cursor or selection is not editing the expression. When the cursor enters the expression, the original Markdown source is shown again.
+Live KaTeX previews in Joplin's Markdown editor. Equations render in place when you are not editing them; clicking a preview or moving the cursor into it reveals the original TeX. The preview never rewrites your note.
 
 ## Project Links
 
-- Source repository: [git.pawelsarkowicz.xyz/ps/Joplin-Live-Math](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math)
-- Releases: [git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/releases](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/releases)
-- Issues: [git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/issues](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/issues)
-- Clone URL: `ssh://git@git.pawelsarkowicz.xyz:2222/ps/Joplin-Live-Math.git`
+- [Source repository](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math)
+- [Releases](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/releases)
+- [Issue tracker](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/issues)
+- [Changelog](CHANGELOG.md)
+- Clone: `ssh://git@git.pawelsarkowicz.xyz:2222/ps/Joplin-Live-Math.git`
 
-## Screenshots
+## Requirements
 
-Screenshots placeholder:
+- Joplin desktop 3.1 or newer, using the CodeMirror 6 Markdown editor.
+- The legacy CodeMirror 5 editor, Rich Text editor, and mobile apps are not supported.
+- Rich Markdown is optional. It enhances the Markdown editor; it is different from Joplin's Rich Text editor.
 
-- Inline math rendered in the editor
-- Display math rendered in the editor
-- Source restored while editing
+Development and user verification have been on Joplin 3.6.14 on Linux with Rich Markdown. Automated browser tests exercise CodeMirror and simulated Joplin quote styles, not the full Joplin application or every theme/plugin combination.
+
+## Installation
+
+Install a `.jpl` attached to a repository release, or build one locally as described below.
+
+1. In Joplin, open **Tools > Options > Plugins** and choose **Install from file** from the plugin menu.
+2. Select `Joplin-Live-Math.jpl`.
+3. Fully quit Joplin, including the system tray instance, and restart it.
+4. Use the Markdown editor. **Options > Joplin-Live-Math > Enable Live Math** controls the previews.
+
+To update, install the newly built `.jpl` and restart again. Install the archive, not the companion `.json`, an individual JavaScript file, or the entire `publish` directory.
+
+## Editing And Copying
+
+- Click a rendered equation to reveal its source. The click position approximates a position within the TeX; it is not a mapping from individual rendered symbols to source characters.
+- Move the cursor or selection outside the equation to render it again. Inline source also stays visible at its delimiter boundaries.
+- Select source and copy normally. Copying with a cursor inside an equation copies its delimited Markdown source; selected text is copied as stored in the note.
+- Multiline equations use block widgets. They retain list indentation and Joplin's native left bar inside blockquotes. Same-line equations stay in the text flow.
+- Rendering and fonts are local. The plugin does not send note content to a rendering service.
 
 ## Supported Syntax
 
 Inline math:
 
 ```markdown
-Let $X \sim N(0,1)$.
+Let $X \sim N(0,1)$ and $x=y$.
 ```
 
-Pure math inside inline code spans is also rendered, which helps with existing notes that wrapped TeX in backticks:
-
-```markdown
-`$x=y$`
-```
-
-Display math:
+Display math, including matrices and equation tags:
 
 ```markdown
 $$
-E[X^2] = 1
+A = \begin{pmatrix}
+a & b \\
+c & d
+\end{pmatrix}
+\tag{1}
 $$
 ```
 
-Display math can use standalone delimiter lines, same-line `$$...$$` syntax, or multiline content beside the delimiters:
+Same-line `$$x+y$$` and multiline expressions with content beside their delimiters are also supported:
 
 ```markdown
 $$L = \begin{pmatrix}
@@ -47,82 +65,91 @@ x & y
 \end{pmatrix}$$
 ```
 
-Display math nested in Markdown containers such as blockquotes and list items uses inline editor layout so it stays aligned with the surrounding Markdown.
+Quotes and lists:
 
-## Behavior
+```markdown
+> An estimate:
+>
+> $$
+> \delta \gtrsim \frac{c_\varepsilon-Cr}{C}.
+> $$
 
-- Math renders with KaTeX when the cursor and selection are outside the expression.
-- The original `$...$` or `$$...$$` source is shown when the cursor or selection intersects the expression.
-- Escaped dollars such as `\$` are ignored.
-- Fenced code blocks and mixed inline code spans are ignored.
-- Malformed or incomplete math is left as source.
-- The Markdown document is never modified by the preview.
-
-## Installation
-
-Download the latest `.jpl` file from the [releases page](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/releases), then install it in Joplin desktop from **Tools > Options > Plugins > Install from file**.
-
-To build the plugin locally instead:
-
-```bash
-npm install
-npm run dist
+- Inline math: $x^2$.
+- $$
+  x^2 + y^2 = 1
+  $$
 ```
 
-The archive is written to:
+For existing notes, an inline code span containing just a math expression, such as `` `$x=y$` ``, is also rendered. Mixed code spans and fenced code blocks are kept literal, including fences inside lists and quotes.
 
-```text
-publish/Joplin-Live-Math.jpl
-```
+Use ordinary TeX in the editor: `_` introduces a subscript, `\_` is a literal underscore, and `\\[2mm]` ends a matrix row with extra spacing. See [KaTeX's supported functions](https://katex.org/docs/supported.html) for available commands. Every `$$...$$` expression uses KaTeX display mode, independently of its editor layout.
 
-For development, you can also point Joplin's **Development plugins** setting at this repository after running `npm run dist`.
+## Troubleshooting
+
+If there is no preview, move the cursor and selection outside the expression, check **Enable Live Math**, and confirm that you are in the Markdown editor. After installing an update, check the version in Joplin's plugin list and fully restart the application.
+
+KaTeX parse failures can appear as red TeX. Unmatched delimiters stay as source. Check the TeX separately from the surrounding Markdown; wrapping an equation in extra backslashes can change its meaning.
+
+For a rendering or interaction bug, include a minimal note in a fenced code block, your Joplin/plugin versions, theme, and relevant editor plugins in an [issue](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/issues). If the extension fails to load, **Help > Toggle Development Tools** may contain a relevant `Joplin-Live-Math` error.
+
+## Known Limitations
+
+- Single-dollar inline math does not span multiple lines. Use `$$` for multiline expressions.
+- Dollar-sign detection uses heuristics to avoid currency. Some unusual delimiters, word-adjacent math, or complex Markdown nesting may remain as source.
+- As a compatibility behavior, a standalone `\>` line inside display math is rendered as `>`. Standard TeX normally uses `\>` for spacing. Prefer `>` or `\gt` for comparisons.
+- This plugin changes only the editor preview. Joplin's viewer, exports, and other clients use their own math handling, which may differ for compatibility syntax such as math in backticks.
+- The whole note is parsed after document edits. Cursor-only updates reuse the parsed expressions, but still rebuild decorations. Very large notes may be slower.
+- Wide equations scroll horizontally. Equation tags and sizing in particularly narrow editor panes may need more space.
 
 ## Development
+
+Use Node.js 22.12+ in the 22.x line, or Node.js 24+, and npm. Node is needed only to build/test the plugin, not to install a `.jpl` in Joplin.
 
 ```bash
 git clone ssh://git@git.pawelsarkowicz.xyz:2222/ps/Joplin-Live-Math.git
 cd Joplin-Live-Math
-npm install
+npm ci
+npm run typecheck
 npm test
 npm run dist
+npm run check:package
 ```
 
-The build uses webpack and follows Joplin's current CodeMirror 6 content-script pattern:
+Build outputs:
 
-- `src/index.ts` registers the plugin setting and the CodeMirror content script.
-- `src/contentScript.ts` installs the CM6 extension and listens for setting updates.
-- `src/mathDecorations.ts` provides a CM6 `StateField` of replacement decorations, using a Rich-Tables-style `RangeSetBuilder` decoration pipeline.
-- `src/mathParser.ts` conservatively scans Markdown source for math while skipping code.
-- `src/mathWidget.ts` renders KaTeX widgets.
-- `src/styles.css` contains editor-only styling. KaTeX CSS is copied from `katex` with WOFF2 fonts embedded, since Joplin injects content-script CSS without preserving relative asset URLs.
+- `dist/`: compiled entry points, styles, embedded fonts, and license notices.
+- `publish/Joplin-Live-Math.jpl`: installable plugin archive.
+- `publish/Joplin-Live-Math.json`: manifest metadata and archive SHA-256 hash.
 
-Browser rendering tests cover matrix bracket sizing and font loading with Joplin-style CSS injection:
+Generated build outputs are ignored by Git. For development loading, set Joplin's **Development plugins** path to this repository after building, then restart Joplin. Avoid loading both an installed and development copy simultaneously.
+
+Browser tests:
 
 ```bash
 npx playwright install chromium
 npm run test:browser
 ```
 
-An existing Chromium-compatible browser can be used by setting `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable path.
+An existing Chromium-compatible browser can be selected with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. The tests use a separate temporary browser profile and cover font loading, matrix brackets, quote borders, and editor interactions at desktop and narrow widths. Screenshots are written under `test-results/`.
 
-## Compatibility Notes
+### Implementation
 
-This plugin targets Joplin desktop with the CodeMirror 6 Markdown editor. It does not support the legacy CodeMirror 5 editor or the rich text editor.
+- `src/index.ts`: plugin registration and the enable setting.
+- `src/contentScript.ts`: CodeMirror extension installation and settings updates.
+- `src/mathParser.ts`: delimiter scanning and source extraction; Lezer's Markdown parser identifies fenced-code boundaries.
+- `src/mathDecorations.ts`: source/preview selection, copying, and sorted CodeMirror decorations.
+- `src/mathWidget.ts` and `src/styles.css`: KaTeX widgets and editor layout.
+- `scripts/katexCss.js`: embeds WOFF2 fonts because Joplin injects CSS without preserving relative font URLs.
+- `scripts/archive.js` and `scripts/checkPackage.js`: packaging and archive smoke checks.
 
-The content script imports CodeMirror packages directly, and the webpack config externalizes `@codemirror/*` and `@lezer/*` packages. This follows the same pattern used by current CM6 Joplin plugins such as Rich Tables: Joplin's own editor packages are used at runtime, avoiding the duplicate-CodeMirror extension-instance problem described in the Joplin CM6 plugin documentation.
-
-## Known Limitations
-
-- Inline math does not span multiple lines.
-- The parser is conservative around ordinary dollar signs and may leave unusual math-like text as source.
-- Very large notes are rescanned after document or selection changes; this keeps the first version simple and correct.
+CodeMirror and Lezer packages are externalized and supplied by Joplin at runtime. KaTeX is bundled. This avoids loading a second copy of CodeMirror into Joplin's editor.
 
 ## References And Licenses
 
-The CM6 decoration architecture in `src/mathDecorations.ts` was adapted from the StateField/RangeSetBuilder pattern used by [`bwat47/joplin-rich-tables`](https://github.com/bwat47/joplin-rich-tables). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+This plugin is MIT-licensed. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The archive includes KaTeX's full license at `licenses/KaTeX-LICENSE.txt`.
 
-- [Joplin's official CodeMirror 6 Markdown editor plugin documentation](https://joplinapp.org/help/api/tutorials/cm6_plugin/).
-- [`bwat47/joplin-rich-tables`](https://github.com/bwat47/joplin-rich-tables), MIT license, especially its use of CM6 content scripts and editor decorations for rendered source.
-- [`blueberrycongee/codemirror-live-markdown`](https://github.com/blueberrycongee/codemirror-live-markdown), MIT license, especially its high-level live-preview pattern of switching between source and widgets based on selection.
-
-This plugin is released under the MIT license.
+- [Joplin's CodeMirror 6 plugin guide](https://joplinapp.org/help/api/tutorials/cm6_plugin/).
+- [bwat47/joplin-rich-tables](https://github.com/bwat47/joplin-rich-tables), MIT: the StateField/decoration architecture informed this plugin's implementation.
+- [blueberrycongee/codemirror-live-markdown](https://github.com/blueberrycongee/codemirror-live-markdown), MIT: a reference for switching source and previews based on selection.
+- [KaTeX](https://github.com/KaTeX/KaTeX), MIT: math rendering and fonts.
+- [Lezer Markdown](https://github.com/lezer-parser/markdown), MIT: fenced-code parsing.

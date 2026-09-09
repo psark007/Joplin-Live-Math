@@ -51,6 +51,7 @@ export default (context: ContentScriptContext) => ({
 		};
 
 		const liveMathCompartment = new Compartment();
+		let receivedSettingCommand = false;
 		codeMirrorWrapper.addExtension(liveMathCompartment.of(extensionForSetting(true)));
 
 		const reconfigure = (enabled: boolean) => {
@@ -61,13 +62,16 @@ export default (context: ContentScriptContext) => ({
 
 		if (typeof codeMirrorWrapper.registerCommand === 'function') {
 			codeMirrorWrapper.registerCommand('joplinLiveMath.setEnabled', (enabled: boolean) => {
+				receivedSettingCommand = true;
 				reconfigure(enabled !== false);
 			});
 		}
 
 		void getInitialSettings(context)
 			.then(settings => {
-				reconfigure(settings.enableLiveMath);
+				if (!receivedSettingCommand) {
+					reconfigure(settings.enableLiveMath);
+				}
 			})
 			.catch(error => {
 				console.warn('Joplin-Live-Math: failed to apply settings after loading', error);

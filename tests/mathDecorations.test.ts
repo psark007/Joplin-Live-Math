@@ -1,4 +1,4 @@
-import { EditorState, Transaction } from '@codemirror/state';
+import { EditorSelection, EditorState, Transaction } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
 import { findMathExpressions } from '../src/mathParser';
 import { liveMathEnabledFacet, mathDecorationsField, mathSourceForCopy } from '../src/mathDecorations';
@@ -51,6 +51,20 @@ const collectDecorations = (doc: string, anchor: number) => {
 };
 
 describe('math decorations', () => {
+	it('can reveal multiline source on a line that already has inline math', () => {
+		const doc = 'Inline $x$ then $$y\nz$$';
+		expect(() => collectDecorations(doc, doc.indexOf('z'))).not.toThrow();
+	});
+
+	it('reveals display source when any cursor is inside, even if another is on its boundary', () => {
+		const state = EditorState.create({
+			doc: '$$\nx\n$$',
+			selection: EditorSelection.create([EditorSelection.cursor(0), EditorSelection.cursor(3)]),
+			extensions: [EditorState.allowMultipleSelections.of(true), mathDecorationsField],
+		});
+		expect(collectFromState(state).some(decoration => decoration.hasWidget)).toBe(false);
+	});
+
 	it('renders inline math when the cursor is before the expression', () => {
 		expect(collectDecorations('A $x^2$ B', 1)).toEqual([
 			expect.objectContaining({ from: 2, to: 7, hasWidget: true, katexDisplayMode: false }),

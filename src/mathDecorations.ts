@@ -1,4 +1,4 @@
-import { EditorState, Facet, RangeSetBuilder, StateField } from '@codemirror/state';
+import { EditorState, Facet, type Range, StateField } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
 import { findMathExpressions, type MathExpression } from './mathParser';
 import { MathWidget } from './mathWidget';
@@ -195,8 +195,9 @@ const selectionTouchesExpression = (
 				return true;
 			}
 
-			if (range.from >= expression.from && range.from <= expression.to) {
-				return expression.kind === 'inline' || options.revealBoundaryExpressions;
+			if (range.from >= expression.from && range.from <= expression.to &&
+				(expression.kind === 'inline' || options.revealBoundaryExpressions)) {
+				return true;
 			}
 
 			continue;
@@ -263,13 +264,13 @@ const blockIndentColumns = (
 const addDisplaySourceLineDecorations = (
 	state: EditorState,
 	expression: MathExpression,
-	builder: RangeSetBuilder<Decoration>
+	ranges: Range<Decoration>[]
 ) => {
 	let position = expression.from;
 
 	while (position <= expression.to) {
 		const line = state.doc.lineAt(position);
-		builder.add(line.from, line.from, Decoration.line({ class: 'joplin-live-math-source-line' }));
+		ranges.push(Decoration.line({ class: 'joplin-live-math-source-line' }).range(line.from));
 
 		if (line.to >= expression.to || line.to === state.doc.length) {
 			break;
@@ -288,7 +289,7 @@ const buildDecorations = (
 		return Decoration.none;
 	}
 
-	const builder = new RangeSetBuilder<Decoration>();
+	const ranges: Range<Decoration>[] = [];
 
 	for (const expression of expressions) {
 		// Structural requirement (see `spansMultipleLines` above) -- distinct
@@ -298,21 +299,15 @@ const buildDecorations = (
 
 		if (selectionTouchesExpression(state, expression, options)) {
 			if (mustRenderAsBlock) {
-				addDisplaySourceLineDecorations(state, expression, builder);
+				addDisplaySourceLineDecorations(state, expression, ranges);
 			} else {
-				builder.add(
-					expression.from,
-					expression.to,
-					Decoration.mark({ class: 'joplin-live-math-source-inline' })
-				);
+				ranges.push(Decoration.mark({ class: 'joplin-live-math-source-inline' }).range(expression.from, expression.to));
 			}
 
 			continue;
 		}
 
-		builder.add(
-			expression.from,
-			expression.to,
+		ranges.push(
 			Decoration.replace({
 				widget: new MathWidget(
 					expression.source,
@@ -328,11 +323,12 @@ const buildDecorations = (
 					)
 				),
 				block: mustRenderAsBlock,
-			})
+			}).range(expression.from, expression.to)
 		);
 	}
 
-	return builder.finish();
+	// A revealed block's line marker may precede an inline widget on the same line.
+	return Decoration.set(ranges, true);
 };
 
 const parseExpressions = (state: EditorState): MathExpression[] =>

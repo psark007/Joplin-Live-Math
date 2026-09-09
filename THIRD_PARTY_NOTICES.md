@@ -1,5 +1,25 @@
 # Third Party Notices
 
+## KaTeX
+
+KaTeX, its CSS, and its WOFF2 fonts are bundled in the plugin. Font files are embedded unchanged as data URLs in the generated stylesheet.
+
+Repository: https://github.com/KaTeX/KaTeX
+
+License: MIT, Copyright (c) 2013-2020 Khan Academy and other contributors.
+
+The full license from the installed KaTeX package is included in every `.jpl` archive as `licenses/KaTeX-LICENSE.txt`.
+
+## CodeMirror And Lezer
+
+CodeMirror and Lezer modules, including `@lezer/markdown` for fenced-code boundaries, are supplied by Joplin at runtime. They are externalized from the plugin's content script, not bundled in the `.jpl`.
+
+Repositories: https://github.com/codemirror and https://github.com/lezer-parser/markdown
+
+## Design References
+
+The live-preview behavior was also informed by https://github.com/blueberrycongee/codemirror-live-markdown. That library is not bundled with this plugin.
+
 ## joplin-rich-tables
 
 This plugin adapts the CodeMirror 6 `StateField`/`RangeSetBuilder` decoration architecture used by `bwat47/joplin-rich-tables`.

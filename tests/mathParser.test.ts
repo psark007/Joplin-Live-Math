@@ -3,6 +3,38 @@ import katex from 'katex';
 import { findMathExpressions } from '../src/mathParser';
 
 describe('findMathExpressions', () => {
+	it.each([
+		'> ```tex\n> $x$\n> $$\n> y\n> $$\n> ```',
+		'- ```tex\n  $x$\n  ```',
+		'1. Item\n\n   ~~~tex\n   $x$\n   ~~~',
+		'> ```tex\n> $x$\n\nOutside $y$',
+	])('respects Markdown container boundaries around fenced code: %s', doc => {
+		expect(findMathExpressions(doc).map(expression => expression.source))
+			.toEqual(doc.includes('Outside') ? ['y'] : []);
+	});
+
+	it.each([
+		'  $$\n  a\n  > b\n  $$',
+		'- $$\n  a\n  > b\n  $$',
+		'> $$\n> a\n> > b\n> $$',
+		'>> $$\n>> a\n>> > b\n>> $$',
+	])('preserves comparison operators after removing only the enclosing quote prefix: %s', doc => {
+		expect(findMathExpressions(doc)).toEqual([
+			expect.objectContaining({ source: 'a\n> b' }),
+		]);
+	});
+
+	it('does not join display delimiters across a fenced code block', () => {
+		const doc = '$$\na\n```tex\n$x$\n```\nb\n$$';
+		expect(findMathExpressions(doc)).toEqual([]);
+	});
+
+	it('does not overlap an existing display block while matching an earlier delimiter', () => {
+		const doc = '$$unfinished\n\n$$\nx\n$$\n\nend$$';
+		const expressions = findMathExpressions(doc);
+		expect(expressions).toEqual([expect.objectContaining({ source: 'x' })]);
+	});
+
 	it('finds one inline expression', () => {
 		expect(findMathExpressions('Inline: $x^2 + 1$ test.')).toEqual([
 			expect.objectContaining({
@@ -86,6 +118,11 @@ describe('findMathExpressions', () => {
 
 	it('ignores mixed inline code spans', () => {
 		expect(findMathExpressions('Code: `const formula = "$x^2$"`')).toEqual([]);
+	});
+
+	it('does not render mixed prose between equations inside a code span', () => {
+		expect(findMathExpressions('Code: `$x$ and $y$`')).toEqual([]);
+		expect(findMathExpressions('Code: `$$x$$ and $$y$$`')).toEqual([]);
 	});
 
 	it('ignores fenced code blocks', () => {

@@ -1,3 +1,5 @@
+import { parser as markdownParser } from '@lezer/markdown';
+
 export type MathExpressionKind = 'inline' | 'display';
 
 export interface MathExpression {
@@ -29,7 +31,7 @@ interface InlineCodeSpan extends Range {
 }
 
 interface DisplaySourceOptions {
-	stripBlockquotePrefixes: boolean;
+	blockquoteDepth: number;
 }
 
 const lineIterator = (doc: string): TextLine[] => {
@@ -72,9 +74,10 @@ const isPositionInRanges = (position: number, ranges: Range[]): boolean =>
 
 const intersects = (left: Range, right: Range): boolean => left.from < right.to && right.from < left.to;
 
-const markdownContainerContentOffset = (lineText: string): { offset: number; hasMarkdownContainer: boolean } => {
+const markdownContainerContentOffset = (lineText: string): { offset: number; hasMarkdownContainer: boolean; blockquoteDepth: number } => {
 	let offset = 0;
 	let hasMarkdownContainer = false;
+	let blockquoteDepth = 0;
 
 	const leadingWhitespace = /^[ \t]*/.exec(lineText.slice(offset))?.[0] ?? '';
 	if (leadingWhitespace.length > 0) {
@@ -84,6 +87,7 @@ const markdownContainerContentOffset = (lineText: string): { offset: number; has
 
 	while (lineText[offset] === '>') {
 		hasMarkdownContainer = true;
+		blockquoteDepth += 1;
 		offset += 1;
 
 		if (lineText[offset] === ' ' || lineText[offset] === '\t') {
@@ -103,61 +107,32 @@ const markdownContainerContentOffset = (lineText: string): { offset: number; has
 	const trailingWhitespace = /^[ \t]*/.exec(lineText.slice(offset))?.[0] ?? '';
 	offset += trailingWhitespace.length;
 
-	return { offset, hasMarkdownContainer };
+	return { offset, hasMarkdownContainer, blockquoteDepth };
 };
 
-const lineStartsFence = (lineText: string) => {
-	const match = /^( {0,3})(`{3,}|~{3,})/.exec(lineText);
-	if (!match) {
-		return null;
-	}
-
-	return {
-		character: match[2][0],
-		length: match[2].length,
-	};
-};
-
-const lineClosesFence = (lineText: string, fence: { character: string; length: number }): boolean => {
-	const match = /^( {0,3})(`+|~+)\s*$/.exec(lineText);
-	return !!match && match[2][0] === fence.character && match[2].length >= fence.length;
-};
-
-const findFencedCodeRanges = (doc: string, lines: TextLine[]): Range[] => {
+const findFencedCodeRanges = (doc: string): Range[] => {
 	const ranges: Range[] = [];
-	let openFence: { character: string; length: number; from: number } | null = null;
-
-	for (const line of lines) {
-		if (!openFence) {
-			const fence = lineStartsFence(line.text);
-			if (fence) {
-				openFence = { ...fence, from: line.from };
+	markdownParser.parse(doc).iterate({
+		enter: node => {
+			if (node.name === 'FencedCode') {
+				ranges.push({ from: node.from, to: node.to });
+				return false;
 			}
-			continue;
-		}
-
-		if (lineClosesFence(line.text, openFence)) {
-			ranges.push({ from: openFence.from, to: line.to });
-			openFence = null;
-		}
-	}
-
-	if (openFence) {
-		ranges.push({ from: openFence.from, to: doc.length });
-	}
-
+			return undefined;
+		},
+	});
 	return ranges;
 };
 
 const findDisplayDelimiterLine = (
 	line: TextLine,
 	excludedRanges: Range[]
-): { delimiterFrom: number; delimiterTo: number; block: boolean } | null => {
+): { delimiterFrom: number; delimiterTo: number; block: boolean; blockquoteDepth: number } | null => {
 	if (isPositionInRanges(line.from, excludedRanges)) {
 		return null;
 	}
 
-	const { offset, hasMarkdownContainer } = markdownContainerContentOffset(line.text);
+	const { offset, hasMarkdownContainer, blockquoteDepth } = markdownContainerContentOffset(line.text);
 	if (!line.text.slice(offset).match(/^\$\$\s*$/)) {
 		return null;
 	}
@@ -168,20 +143,22 @@ const findDisplayDelimiterLine = (
 		delimiterFrom,
 		delimiterTo: delimiterFrom + 2,
 		block: !hasMarkdownContainer && offset === 0,
+		blockquoteDepth,
 	};
 };
 
-const stripBlockquotePrefix = (lineText: string): string => {
+const stripBlockquotePrefix = (lineText: string, depth: number): string => {
 	let text = lineText;
 
-	while (true) {
-		const match = /^(?:[ \t]{0,3}>[ \t]?)/.exec(text);
+	for (let level = 0; level < depth; level += 1) {
+		const match = /^[ \t]*>[ \t]?/.exec(text);
 		if (!match) {
 			return text;
 		}
 
 		text = text.slice(match[0].length);
 	}
+	return text;
 };
 
 const normalizeStandaloneEscapedGreaterThan = (lineText: string): string =>
@@ -189,7 +166,7 @@ const normalizeStandaloneEscapedGreaterThan = (lineText: string): string =>
 
 const displaySourceFromText = (text: string, options: DisplaySourceOptions): string => {
 	const normalizedLines = text.split('\n')
-		.map(line => options.stripBlockquotePrefixes ? stripBlockquotePrefix(line) : line)
+		.map(line => stripBlockquotePrefix(line, options.blockquoteDepth))
 		.map(normalizeStandaloneEscapedGreaterThan);
 	const contentLines = normalizedLines.filter(line => line.trim().length > 0);
 	if (contentLines.length === 0) {
@@ -221,6 +198,9 @@ const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]
 
 		for (let closeIndex = index + 1; closeIndex < lines.length; closeIndex += 1) {
 			const closing = lines[closeIndex];
+			if (excludedRanges.some(range => intersects({ from: opening.from, to: closing.to }, range))) {
+				break;
+			}
 			const closingDelimiter = findDisplayDelimiterLine(closing, excludedRanges);
 			if (!closingDelimiter) {
 				continue;
@@ -231,7 +211,7 @@ const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]
 			const block = openingDelimiter.block && closingDelimiter.block;
 			const source = displaySourceFromLines(
 				lines.slice(index + 1, closeIndex),
-				{ stripBlockquotePrefixes: !block }
+				{ blockquoteDepth: openingDelimiter.blockquoteDepth }
 			);
 			if (source.length > 0) {
 				expressions.push({
@@ -381,6 +361,12 @@ const findMultilineDisplayMath = (doc: string, lines: TextLine[], excludedRanges
 			for (let closeIndex = index + 1; closeIndex < lines.length; closeIndex += 1) {
 				const closing = lines[closeIndex];
 				const closingDelimiterFrom = findDoubleDollarInLine(doc, closing, closing.from, excludedRanges);
+				if (excludedRanges.some(range => intersects({
+					from: openingDelimiterFrom,
+					to: closingDelimiterFrom === null ? closing.to : closingDelimiterFrom + 2,
+				}, range))) {
+					break;
+				}
 				if (closingDelimiterFrom === null) {
 					continue;
 				}
@@ -395,7 +381,7 @@ const findMultilineDisplayMath = (doc: string, lines: TextLine[], excludedRanges
 				);
 				const source = displaySourceFromText(
 					doc.slice(contentFrom, contentTo),
-					{ stripBlockquotePrefixes: !block }
+					{ blockquoteDepth: markdownContainerContentOffset(opening.text).blockquoteDepth }
 				);
 				if (source.length > 0) {
 					expressions.push({
@@ -430,6 +416,12 @@ const expressionFromInlineCodeSpan = (span: InlineCodeSpan): MathExpression | nu
 	const trimmedFrom = span.contentFrom + leadingWhitespace;
 	const trimmedTo = span.contentTo - trailingWhitespace;
 	const text = span.text.slice(leadingWhitespace, span.text.length - trailingWhitespace);
+	const delimiterWidth = text.startsWith('$$') ? 2 : 1;
+	for (let index = delimiterWidth; index < text.length - delimiterWidth; index += 1) {
+		if (text[index] === '$' && !isEscaped(text, index)) {
+			return null;
+		}
+	}
 
 	if (text.startsWith('$$') && text.endsWith('$$') && text.length > 4) {
 		const source = text.slice(2, -2).trim();
@@ -644,7 +636,7 @@ const findInlineMathInLine = (doc: string, line: TextLine, excludedRanges: Range
 
 export const findMathExpressions = (doc: string): MathExpression[] => {
 	const lines = lineIterator(doc);
-	const fencedCodeRanges = findFencedCodeRanges(doc, lines);
+	const fencedCodeRanges = findFencedCodeRanges(doc);
 	const displayExpressions = findDisplayMath(doc, lines, fencedCodeRanges);
 	const displayRanges = displayExpressions.map(({ from, to }) => ({ from, to }));
 	const inlineCodeSpans = lines.flatMap(findInlineCodeSpansInLine);

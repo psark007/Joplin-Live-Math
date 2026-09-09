@@ -61,6 +61,7 @@ const mainConfig = {
 					transform: embedKatexFonts,
 				},
 				{ from: 'LICENSE', to: 'LICENSE.md' },
+				{ from: 'node_modules/katex/LICENSE', to: 'licenses/KaTeX-LICENSE.txt' },
 				{ from: 'THIRD_PARTY_NOTICES.md', to: 'THIRD_PARTY_NOTICES.md' },
 			],
 		}),
