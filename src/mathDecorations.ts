@@ -322,7 +322,10 @@ const buildDecorations = (
 					expression.to,
 					expression.contentFrom,
 					expression.contentTo,
-					blockIndentColumns(state, expression, mustRenderAsBlock)
+					blockIndentColumns(state, expression, mustRenderAsBlock),
+					mustRenderAsBlock && /^[ \t]*>/.test(
+						state.sliceDoc(state.doc.lineAt(expression.from).from, expression.from)
+					)
 				),
 				block: mustRenderAsBlock,
 			})

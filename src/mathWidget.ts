@@ -10,7 +10,8 @@ export class MathWidget extends WidgetType {
 		private readonly to: number,
 		private readonly contentFrom: number,
 		private readonly contentTo: number,
-		private readonly indentColumns = 0
+		private readonly indentColumns = 0,
+		private readonly blockQuote = false
 	) {
 		super();
 	}
@@ -24,13 +25,17 @@ export class MathWidget extends WidgetType {
 			other.to === this.to &&
 			other.contentFrom === this.contentFrom &&
 			other.contentTo === this.contentTo &&
-			other.indentColumns === this.indentColumns
+			other.indentColumns === this.indentColumns &&
+			other.blockQuote === this.blockQuote
 		);
 	}
 
 	public toDOM(): HTMLElement {
 		const container = document.createElement(this.blockLayout ? 'div' : 'span');
 		container.className = this.blockLayout ? 'joplin-live-math-display' : 'joplin-live-math-inline';
+		if (this.blockQuote) {
+			container.classList.add('cm-blockQuote');
+		}
 		container.setAttribute('aria-label', this.source);
 		container.setAttribute('data-joplin-live-math-widget', 'true');
 		container.setAttribute('data-joplin-live-math-display-mode', String(this.katexDisplayMode));

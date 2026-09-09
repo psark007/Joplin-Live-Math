@@ -8,6 +8,7 @@ interface DecoratedRange {
 	to: number;
 	hasWidget: boolean;
 	block: boolean;
+	blockQuote: boolean;
 	indentColumns: number;
 	katexDisplayMode: boolean;
 	className?: string;
@@ -26,6 +27,7 @@ const collectFromState = (state: EditorState): DecoratedRange[] => {
 			to,
 			hasWidget: !!widget,
 			block: value.spec.block === true,
+			blockQuote: widget?.blockQuote ?? false,
 			indentColumns: widget?.indentColumns ?? 0,
 			katexDisplayMode: widget?.katexDisplayMode ?? false,
 			className: value.spec.class,
@@ -161,6 +163,28 @@ x & y
 	it('uses inline layout and KaTeX display style for same-line double-dollar math', () => {
 		expect(collectDecorations('> An equation $$ x^2 $$ here', 0)).toEqual([
 			expect.objectContaining({ hasWidget: true, block: false, indentColumns: 0, katexDisplayMode: true }),
+		]);
+	});
+
+	it.each([
+		'> $$\n> x^2\n> $$',
+		'  >> $$\n  >> x^2\n  >> $$',
+		'> - $$\n>   x^2\n>   $$',
+	])('preserves the quote context on a multiline math widget: %s', doc => {
+		expect(collectDecorations(doc, 0)).toEqual([
+			expect.objectContaining({ hasWidget: true, block: true, blockQuote: true }),
+		]);
+	});
+
+	it.each([
+		'> Inline $x^2$ here',
+		'> Same-line $$x^2$$ here',
+		'- $$\n  x^2\n  $$',
+		'1. $$\n   x^2\n   $$',
+		'$$\nx\n> 0\n$$',
+	])('does not add a quote bar to inline or non-quoted math: %s', doc => {
+		expect(collectDecorations(doc, 0)).toEqual([
+			expect.objectContaining({ hasWidget: true, blockQuote: false }),
 		]);
 	});
 

@@ -32,6 +32,18 @@
 	overflow-y: hidden;
 }
 
+/* Keep Joplin's native quote border continuous across replaced lines. */
+.joplin-live-math-display.cm-blockQuote {
+	margin: 0;
+	max-width: 100%;
+	padding-top: 0.6em;
+	padding-bottom: 0.6em;
+}
+
+.joplin-live-math-display.cm-blockQuote > .katex-display {
+	margin-left: var(--joplin-live-math-indent-width, 0ch);
+}
+
 .joplin-live-math-error {
 	border-bottom: 1px dotted #cc3333;
 	color: #cc3333;
