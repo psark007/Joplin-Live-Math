@@ -94,7 +94,16 @@ The build uses webpack and follows Joplin's current CodeMirror 6 content-script 
 - `src/mathDecorations.ts` provides a CM6 `StateField` of replacement decorations, using a Rich-Tables-style `RangeSetBuilder` decoration pipeline.
 - `src/mathParser.ts` conservatively scans Markdown source for math while skipping code.
 - `src/mathWidget.ts` renders KaTeX widgets.
-- `src/styles.css` contains editor-only styling plus KaTeX CSS is copied from `katex`.
+- `src/styles.css` contains editor-only styling. KaTeX CSS is copied from `katex` with WOFF2 fonts embedded, since Joplin injects content-script CSS without preserving relative asset URLs.
+
+Browser rendering tests cover matrix bracket sizing and font loading with Joplin-style CSS injection:
+
+```bash
+npx playwright install chromium
+npm run test:browser
+```
+
+An existing Chromium-compatible browser can be used by setting `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable path.
 
 ## Compatibility Notes
 

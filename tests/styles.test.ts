@@ -18,4 +18,9 @@ describe('math widget styles', () => {
 	it('resets inherited Rich Markdown text indentation on display widgets', () => {
 		expect(ruleBody('.joplin-live-math-display')).toMatch(/text-indent:\s*0;/);
 	});
+
+	it('keeps display-style KaTeX inline when rendered by an inline widget', () => {
+		expect(ruleBody('.joplin-live-math-inline > .katex-display')).toMatch(/display:\s*inline-block;/);
+		expect(ruleBody('.joplin-live-math-inline > .katex-display')).toMatch(/margin:\s*0;/);
+	});
 });

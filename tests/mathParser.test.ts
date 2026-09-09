@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import katex from 'katex';
 import { findMathExpressions } from '../src/mathParser';
 
 describe('findMathExpressions', () => {
@@ -117,6 +118,48 @@ describe('findMathExpressions', () => {
 		]);
 	});
 
+	it('preserves a greater-than comparison line in top-level display math', () => {
+		const doc = [
+			'$$',
+			'a',
+			'>',
+			'b',
+			'$$',
+		].join('\n');
+
+		expect(findMathExpressions(doc)).toEqual([
+			expect.objectContaining({
+				kind: 'display',
+				source: 'a\n>\nb',
+				block: true,
+				displayMode: true,
+			}),
+		]);
+	});
+
+	it('treats a standalone escaped greater-than line as a display math operator', () => {
+		const doc = [
+			'$$',
+			String.raw`d\big(U(a^{(2)}),U(b^{(2)})\big)`,
+			String.raw`\>`,
+			String.raw`d\big(U(a^{(3)}),U(b^{(3)})\big)`,
+			'$$',
+		].join('\n');
+
+		expect(findMathExpressions(doc)).toEqual([
+			expect.objectContaining({
+				kind: 'display',
+				source: [
+					String.raw`d\big(U(a^{(2)}),U(b^{(2)})\big)`,
+					'>',
+					String.raw`d\big(U(a^{(3)}),U(b^{(3)})\big)`,
+				].join('\n'),
+				block: true,
+				displayMode: true,
+			}),
+		]);
+	});
+
 	it('finds multiline display math with content beside delimiters', () => {
 		const doc = String.raw`$$L = \begin{pmatrix}
 \ell_{11} & 0 & 0 & \cdots & 0 \\
@@ -136,13 +179,49 @@ describe('findMathExpressions', () => {
 		]);
 	});
 
+	it('parses tagged pmatrix display math as KaTeX display-mode source', () => {
+		const doc = [
+			'$$',
+			String.raw`x_\varepsilon(t)=`,
+			String.raw`\begin{pmatrix}`,
+			String.raw`tI_3+i\varepsilon h(t)D`,
+			'&',
+			String.raw`i\left(I_3+\varepsilon h(t)(X+2I_3)\right)`,
+			String.raw`\\[2mm]`,
+			String.raw`i\left(I_3+\varepsilon h(t)(X+2I_3)\right)`,
+			'&',
+			String.raw`2I_3`,
+			String.raw`\end{pmatrix}.`,
+			String.raw`\tag{1}`,
+			'$$',
+		].join('\n');
+		const [expression] = findMathExpressions(doc);
+
+		expect(expression).toEqual(expect.objectContaining({
+			kind: 'display',
+			source: expect.stringContaining(String.raw`\tag{1}`),
+			block: true,
+			displayMode: true,
+		}));
+
+		const html = katex.renderToString(expression.source, {
+			displayMode: expression.displayMode,
+			throwOnError: false,
+			strict: 'ignore',
+			trust: false,
+		});
+
+		expect(html).toContain('katex-display');
+		expect(html).not.toContain('katex-error');
+	});
+
 	it('finds same-line double-dollar math as inline-layout math', () => {
 		expect(findMathExpressions('> An equation $$ x + y $$ here')).toEqual([
 			expect.objectContaining({
 				kind: 'display',
 				source: 'x + y',
 				block: false,
-				displayMode: false,
+				displayMode: true,
 			}),
 		]);
 	});
@@ -161,7 +240,7 @@ describe('findMathExpressions', () => {
 x & y
 \end{pmatrix}`,
 				block: false,
-				displayMode: false,
+				displayMode: true,
 			}),
 		]);
 	});
@@ -178,7 +257,26 @@ x & y
 				kind: 'display',
 				source: 'x + y',
 				block: false,
-				displayMode: false,
+				displayMode: true,
+			}),
+		]);
+	});
+
+	it('treats a standalone escaped greater-than line as an operator inside blockquoted display math', () => {
+		const doc = [
+			'> $$',
+			'> a',
+			String.raw`> \>`,
+			'> b',
+			'> $$',
+		].join('\n');
+
+		expect(findMathExpressions(doc)).toEqual([
+			expect.objectContaining({
+				kind: 'display',
+				source: 'a\n>\nb',
+				block: false,
+				displayMode: true,
 			}),
 		]);
 	});
@@ -195,7 +293,7 @@ x & y
 				kind: 'display',
 				source: 'x + y',
 				block: false,
-				displayMode: false,
+				displayMode: true,
 			}),
 		]);
 	});

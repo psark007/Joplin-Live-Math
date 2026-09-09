@@ -42,8 +42,93 @@ const clickPositionInExpression = (event: MouseEvent, element: Element, contentF
 	return Math.round(contentFrom + ((contentTo - contentFrom) * clickRatio));
 };
 
+export const mathSourceForCopy = (state: EditorState, expressions: MathExpression[]): string | null => {
+	const copiedRanges: string[] = [];
+	let touchesMath = false;
+
+	for (const range of state.selection.ranges) {
+		if (range.empty) {
+			const expression = expressions.find(expression =>
+				range.from >= expression.from && range.from <= expression.to
+			);
+
+			if (expression) {
+				touchesMath = true;
+				copiedRanges.push(state.sliceDoc(expression.from, expression.to));
+			}
+
+			continue;
+		}
+
+		if (expressions.some(expression => range.from < expression.to && range.to > expression.from)) {
+			touchesMath = true;
+		}
+
+		copiedRanges.push(state.sliceDoc(range.from, range.to));
+	}
+
+	if (!touchesMath) {
+		return null;
+	}
+
+	return copiedRanges.join('\n');
+};
+
+const rangeIntersectsNode = (range: globalThis.Range, node: Node): boolean => {
+	try {
+		return range.intersectsNode(node);
+	} catch (error) {
+		return false;
+	}
+};
+
+const selectedWidgetSourceForCopy = (view: EditorView): string | null => {
+	const selection = view.dom.ownerDocument.getSelection();
+	if (!selection || selection.isCollapsed) {
+		return null;
+	}
+
+	const selectedWidgets: { from: number; source: string }[] = [];
+	const widgets = Array.from(view.dom.querySelectorAll(mathWidgetSelector));
+
+	for (const widget of widgets) {
+		let isSelected = false;
+
+		for (let index = 0; index < selection.rangeCount; index += 1) {
+			if (rangeIntersectsNode(selection.getRangeAt(index), widget)) {
+				isSelected = true;
+				break;
+			}
+		}
+
+		if (!isSelected) {
+			continue;
+		}
+
+		const from = readPositionAttribute(widget, 'data-joplin-live-math-from');
+		const to = readPositionAttribute(widget, 'data-joplin-live-math-to');
+		if (from === null || to === null || to <= from) {
+			continue;
+		}
+
+		selectedWidgets.push({
+			from,
+			source: view.state.sliceDoc(from, to),
+		});
+	}
+
+	if (selectedWidgets.length === 0) {
+		return null;
+	}
+
+	return selectedWidgets
+		.sort((left, right) => left.from - right.from)
+		.map(widget => widget.source)
+		.join('\n');
+};
+
 export const liveMathClickHandler = EditorView.domEventHandlers({
-	mousedown: (event, view) => {
+	click: (event, view) => {
 		if (event.button !== 0 || !(event.target instanceof Element)) {
 			return false;
 		}
@@ -59,7 +144,6 @@ export const liveMathClickHandler = EditorView.domEventHandlers({
 			return false;
 		}
 
-		event.preventDefault();
 		view.focus();
 		view.dispatch({
 			selection: {
@@ -70,13 +154,49 @@ export const liveMathClickHandler = EditorView.domEventHandlers({
 
 		return true;
 	},
+	copy: (event, view) => {
+		if (!event.clipboardData) {
+			return false;
+		}
+
+		const field = view.state.field(mathDecorationsField, false);
+		if (!field) {
+			return false;
+		}
+
+		const source = mathSourceForCopy(view.state, field.expressions) ??
+			selectedWidgetSourceForCopy(view);
+		if (source === null) {
+			return false;
+		}
+
+		event.clipboardData.setData('text/plain', source);
+		event.preventDefault();
+		return true;
+	},
 });
 
-const selectionTouchesExpression = (state: EditorState, expression: MathExpression): boolean => {
+interface BuildDecorationOptions {
+	revealBoundaryExpressions: boolean;
+}
+
+const defaultBuildDecorationOptions: BuildDecorationOptions = {
+	revealBoundaryExpressions: false,
+};
+
+const selectionTouchesExpression = (
+	state: EditorState,
+	expression: MathExpression,
+	options: BuildDecorationOptions
+): boolean => {
 	for (const range of state.selection.ranges) {
 		if (range.empty) {
 			if (range.from > expression.from && range.from < expression.to) {
 				return true;
+			}
+
+			if (range.from >= expression.from && range.from <= expression.to) {
+				return expression.kind === 'inline' || options.revealBoundaryExpressions;
 			}
 
 			continue;
@@ -159,7 +279,11 @@ const addDisplaySourceLineDecorations = (
 	}
 };
 
-const buildDecorations = (state: EditorState, expressions: MathExpression[]): DecorationSet => {
+const buildDecorations = (
+	state: EditorState,
+	expressions: MathExpression[],
+	options = defaultBuildDecorationOptions
+): DecorationSet => {
 	if (!state.facet(liveMathEnabledFacet)) {
 		return Decoration.none;
 	}
@@ -172,7 +296,7 @@ const buildDecorations = (state: EditorState, expressions: MathExpression[]): De
 		// styling intent.
 		const mustRenderAsBlock = expression.block || spansMultipleLines(state, expression);
 
-		if (selectionTouchesExpression(state, expression)) {
+		if (selectionTouchesExpression(state, expression, options)) {
 			if (mustRenderAsBlock) {
 				addDisplaySourceLineDecorations(state, expression, builder);
 			} else {
@@ -192,7 +316,10 @@ const buildDecorations = (state: EditorState, expressions: MathExpression[]): De
 			Decoration.replace({
 				widget: new MathWidget(
 					expression.source,
-					expression.displayMode || mustRenderAsBlock,
+					expression.displayMode,
+					mustRenderAsBlock,
+					expression.from,
+					expression.to,
 					expression.contentFrom,
 					expression.contentTo,
 					blockIndentColumns(state, expression, mustRenderAsBlock)
@@ -230,7 +357,9 @@ export const mathDecorationsField = StateField.define<MathDecorationState>({
 			// source-vs-widget decision needs recomputing, so skip re-parsing.
 			return {
 				expressions: value.expressions,
-				decorations: buildDecorations(transaction.state, value.expressions),
+				decorations: buildDecorations(transaction.state, value.expressions, {
+					revealBoundaryExpressions: transaction.isUserEvent('select.pointer'),
+				}),
 			};
 		}
 

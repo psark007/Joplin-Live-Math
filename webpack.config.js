@@ -1,5 +1,6 @@
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const { embedKatexFonts } = require('./scripts/katexCss');
 
 const userConfig = require('./plugin.config.json');
 
@@ -54,8 +55,11 @@ const mainConfig = {
 			patterns: [
 				{ from: 'src/manifest.json', to: 'manifest.json' },
 				{ from: 'src/styles.css', to: 'styles.css' },
-				{ from: 'node_modules/katex/dist/katex.min.css', to: 'katex.min.css' },
-				{ from: 'node_modules/katex/dist/fonts', to: 'fonts' },
+				{
+					from: 'node_modules/katex/dist/katex.min.css',
+					to: 'katex.min.css',
+					transform: embedKatexFonts,
+				},
 				{ from: 'LICENSE', to: 'LICENSE.md' },
 				{ from: 'THIRD_PARTY_NOTICES.md', to: 'THIRD_PARTY_NOTICES.md' },
 			],

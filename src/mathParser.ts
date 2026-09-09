@@ -28,6 +28,10 @@ interface InlineCodeSpan extends Range {
 	text: string;
 }
 
+interface DisplaySourceOptions {
+	stripBlockquotePrefixes: boolean;
+}
+
 const lineIterator = (doc: string): TextLine[] => {
 	const lines: TextLine[] = [];
 	let lineStart = 0;
@@ -180,9 +184,14 @@ const stripBlockquotePrefix = (lineText: string): string => {
 	}
 };
 
-const displaySourceFromText = (text: string): string => {
-	const quoteStrippedLines = text.split('\n').map(stripBlockquotePrefix);
-	const contentLines = quoteStrippedLines.filter(line => line.trim().length > 0);
+const normalizeStandaloneEscapedGreaterThan = (lineText: string): string =>
+	lineText.replace(/^([ \t]*)\\>([ \t]*)$/, '$1>$2');
+
+const displaySourceFromText = (text: string, options: DisplaySourceOptions): string => {
+	const normalizedLines = text.split('\n')
+		.map(line => options.stripBlockquotePrefixes ? stripBlockquotePrefix(line) : line)
+		.map(normalizeStandaloneEscapedGreaterThan);
+	const contentLines = normalizedLines.filter(line => line.trim().length > 0);
 	if (contentLines.length === 0) {
 		return '';
 	}
@@ -191,14 +200,14 @@ const displaySourceFromText = (text: string): string => {
 		...contentLines.map(line => (/^[ \t]*/.exec(line)?.[0].length ?? 0))
 	);
 
-	return quoteStrippedLines
+	return normalizedLines
 		.map(line => line.slice(Math.min(commonIndent, line.length)))
 		.join('\n')
 		.trim();
 };
 
-const displaySourceFromLines = (lines: TextLine[]): string =>
-	displaySourceFromText(lines.map(line => line.text).join('\n'));
+const displaySourceFromLines = (lines: TextLine[], options: DisplaySourceOptions): string =>
+	displaySourceFromText(lines.map(line => line.text).join('\n'), options);
 
 const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]): MathExpression[] => {
 	const expressions: MathExpression[] = [];
@@ -219,10 +228,12 @@ const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]
 
 			const contentFrom = opening.to < doc.length ? opening.to + 1 : opening.to;
 			const contentTo = closing.from;
-			const source = displaySourceFromLines(lines.slice(index + 1, closeIndex));
+			const block = openingDelimiter.block && closingDelimiter.block;
+			const source = displaySourceFromLines(
+				lines.slice(index + 1, closeIndex),
+				{ stripBlockquotePrefixes: !block }
+			);
 			if (source.length > 0) {
-				const block = openingDelimiter.block && closingDelimiter.block;
-
 				expressions.push({
 					kind: 'display',
 					from: block ? opening.from : openingDelimiter.delimiterFrom,
@@ -231,7 +242,7 @@ const findDisplayMath = (doc: string, lines: TextLine[], excludedRanges: Range[]
 					contentTo,
 					source,
 					block,
-					displayMode: block,
+					displayMode: true,
 				});
 			}
 
@@ -376,15 +387,17 @@ const findMultilineDisplayMath = (doc: string, lines: TextLine[], excludedRanges
 
 				const contentFrom = openingDelimiterFrom + 2;
 				const contentTo = closingDelimiterFrom;
-				const source = displaySourceFromText(doc.slice(contentFrom, contentTo));
+				const block = isTopLevelMultilineDisplayBlock(
+					opening,
+					openingDelimiterFrom,
+					closing,
+					closingDelimiterFrom
+				);
+				const source = displaySourceFromText(
+					doc.slice(contentFrom, contentTo),
+					{ stripBlockquotePrefixes: !block }
+				);
 				if (source.length > 0) {
-					const block = isTopLevelMultilineDisplayBlock(
-						opening,
-						openingDelimiterFrom,
-						closing,
-						closingDelimiterFrom
-					);
-
 					expressions.push({
 						kind: 'display',
 						from: block ? opening.from : openingDelimiterFrom,
@@ -393,7 +406,7 @@ const findMultilineDisplayMath = (doc: string, lines: TextLine[], excludedRanges
 						contentTo,
 						source,
 						block,
-						displayMode: block,
+						displayMode: true,
 					});
 				}
 
@@ -432,7 +445,7 @@ const expressionFromInlineCodeSpan = (span: InlineCodeSpan): MathExpression | nu
 			contentTo: trimmedTo - 2,
 			source,
 			block: false,
-			displayMode: false,
+			displayMode: true,
 		};
 	}
 
@@ -509,7 +522,7 @@ const findInlineDisplayMathInLine = (doc: string, line: TextLine, excludedRanges
 						contentTo: closeIndex,
 						source,
 						block: false,
-						displayMode: false,
+						displayMode: true,
 					});
 				}
 

@@ -7,6 +7,13 @@
 	vertical-align: baseline;
 }
 
+.joplin-live-math-inline > .katex-display {
+	display: inline-block;
+	margin: 0;
+	text-align: inherit;
+	vertical-align: baseline;
+}
+
 .joplin-live-math-display {
 	box-sizing: border-box;
 	color: var(--joplin-color);
