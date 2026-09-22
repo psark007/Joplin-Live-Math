@@ -33,6 +33,7 @@ To update, install the newly built `.jpl` and restart again. Install the archive
 
 - Click a rendered equation to reveal its source. The click position approximates a position within the TeX; it is not a mapping from individual rendered symbols to source characters.
 - Move the cursor or selection outside the equation to render it again. Inline source also stays visible at its delimiter boundaries.
+- During mouse-drag selection, previews and already-open source stay fixed until you release the button, so the text does not move under the pointer. Shift-click extends the selection normally.
 - Select source and copy normally. Copying with a cursor inside an equation copies its delimited Markdown source; selected text is copied as stored in the note.
 - Multiline equations use block widgets. They retain list indentation and Joplin's native left bar inside blockquotes. Same-line equations stay in the text flow.
 - Rendering and fonts are local. The plugin does not send note content to a rendering service.
@@ -130,7 +131,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-An existing Chromium-compatible browser can be selected with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. The tests use a separate temporary browser profile and cover font loading, matrix brackets, quote borders, and editor interactions at desktop and narrow widths. Screenshots are written under `test-results/`.
+An existing Chromium-compatible browser can be selected with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. The tests use a separate temporary browser profile and cover font loading, matrix brackets, quote borders, real mouse drags, copying, and click-position accuracy at desktop and narrow widths. Screenshots are written under `test-results/`.
 
 ### Implementation
 

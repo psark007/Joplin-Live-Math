@@ -1,7 +1,7 @@
-import { EditorSelection, EditorState, Transaction } from '@codemirror/state';
+import { Compartment, EditorSelection, EditorState, Transaction } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
 import { findMathExpressions } from '../src/mathParser';
-import { liveMathEnabledFacet, mathDecorationsField, mathSourceForCopy } from '../src/mathDecorations';
+import { liveMathEnabledFacet, mathDecorationsField, mathSourceForCopy, setMathPointerSelecting } from '../src/mathDecorations';
 
 interface DecoratedRange {
 	from: number;
@@ -51,6 +51,58 @@ const collectDecorations = (doc: string, anchor: number) => {
 };
 
 describe('math decorations', () => {
+	it('keeps previews fixed during a drag and reveals the final selection on release', () => {
+		let state = EditorState.create({ doc: 'Before $$\nx+y\n$$ after', extensions: [mathDecorationsField] });
+		const before = state.field(mathDecorationsField).decorations;
+		state = state.update({ effects: setMathPointerSelecting.of(true) }).state;
+		state = state.update({ selection: { anchor: 0, head: 13 }, userEvent: 'select.pointer' }).state;
+		expect(state.field(mathDecorationsField).decorations).toBe(before);
+		const selection = state.selection;
+		state = state.update({ effects: setMathPointerSelecting.of(false) }).state;
+		expect(collectFromState(state).some(decoration => decoration.hasWidget)).toBe(false);
+		expect(state.selection).toBe(selection);
+	});
+
+	it('keeps already-open source fixed from mousedown until release', () => {
+		let state = EditorState.create({ doc: 'Before $x+y$ after', selection: { anchor: 9 }, extensions: [mathDecorationsField] });
+		const before = state.field(mathDecorationsField).decorations;
+		state = state.update({ effects: setMathPointerSelecting.of(true), selection: { anchor: 0 } }).state;
+		expect(state.field(mathDecorationsField).decorations).toBe(before);
+		state = state.update({ effects: setMathPointerSelecting.of(false) }).state;
+		expect(collectFromState(state).some(decoration => decoration.hasWidget)).toBe(true);
+	});
+
+	it('reveals a display boundary on release and resumes keyboard-driven rendering', () => {
+		const doc = 'Before\n\n$$\nx\n$$\n\nAfter';
+		let state = EditorState.create({ doc, extensions: [mathDecorationsField] });
+		state = state.update({ effects: setMathPointerSelecting.of(true), selection: { anchor: doc.indexOf('$$') } }).state;
+		state = state.update({ effects: setMathPointerSelecting.of(false) }).state;
+		expect(collectFromState(state).some(decoration => decoration.hasWidget)).toBe(false);
+		state = state.update({ selection: { anchor: 0 }, userEvent: 'select' }).state;
+		expect(collectFromState(state).some(decoration => decoration.hasWidget)).toBe(true);
+	});
+
+	it('reparses document edits instead of retaining stale drag decorations', () => {
+		let state = EditorState.create({ doc: 'Before $x$ after', extensions: [mathDecorationsField] });
+		state = state.update({ effects: setMathPointerSelecting.of(true) }).state;
+		state = state.update({ changes: { from: 8, to: 9, insert: 'y+z' } }).state;
+		expect(state.field(mathDecorationsField).pointerSelecting).toBe(false);
+		expect(state.field(mathDecorationsField).expressions[0].source).toBe('y+z');
+		expect(collectFromState(state)).toEqual([expect.objectContaining({ from: 7, to: 12, hasWidget: true })]);
+	});
+
+	it('preserves a drag across unrelated configuration changes but still allows disabling math', () => {
+		const compartment = new Compartment();
+		let state = EditorState.create({ doc: 'Before $x$ after', extensions: [mathDecorationsField, compartment.of([])] });
+		const before = state.field(mathDecorationsField).decorations;
+		state = state.update({ effects: setMathPointerSelecting.of(true), selection: { anchor: 8 } }).state;
+		state = state.update({ effects: compartment.reconfigure(EditorState.tabSize.of(8)) }).state;
+		expect(state.field(mathDecorationsField).decorations).toBe(before);
+		state = state.update({ effects: compartment.reconfigure(liveMathEnabledFacet.of(false)) }).state;
+		expect(collectFromState(state)).toEqual([]);
+		expect(state.field(mathDecorationsField).pointerSelecting).toBe(false);
+	});
+
 	it('can reveal multiline source on a line that already has inline math', () => {
 		const doc = 'Inline $x$ then $$y\nz$$';
 		expect(() => collectDecorations(doc, doc.indexOf('z'))).not.toThrow();

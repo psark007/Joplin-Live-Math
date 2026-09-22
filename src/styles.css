@@ -18,11 +18,12 @@
 	box-sizing: border-box;
 	color: var(--joplin-color);
 	display: block;
-	margin: 0.45em 0 0.45em var(--joplin-live-math-indent-width, 0ch);
+	/* CodeMirror measures block heights without vertical margins. */
+	margin: 0 0 0 var(--joplin-live-math-indent-width, 0ch);
 	max-width: calc(100% - var(--joplin-live-math-indent-width, 0ch));
 	overflow-x: auto;
 	overflow-y: hidden;
-	padding: 0.15em 0;
+	padding: 0.6em 0;
 	text-indent: 0;
 }
 

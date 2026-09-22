@@ -1,12 +1,15 @@
-import { EditorState, Facet, type Range, StateField } from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
+import { EditorState, Facet, type Range, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { findMathExpressions, type MathExpression } from './mathParser';
 import { MathWidget } from './mathWidget';
 
 interface MathDecorationState {
 	expressions: MathExpression[];
 	decorations: DecorationSet;
+	pointerSelecting: boolean;
 }
+
+export const setMathPointerSelecting = StateEffect.define<boolean>();
 
 export const liveMathEnabledFacet = Facet.define<boolean, boolean>({
 	combine: values => values.length === 0 ? true : values[values.length - 1],
@@ -127,52 +130,123 @@ const selectedWidgetSourceForCopy = (view: EditorView): string | null => {
 		.join('\n');
 };
 
-export const liveMathClickHandler = EditorView.domEventHandlers({
-	click: (event, view) => {
-		if (event.button !== 0 || !(event.target instanceof Element)) {
-			return false;
-		}
+class MathPointerSelection {
+	private startEvent: MouseEvent | null = null;
+	private finishTimer: number | null = null;
+	public dragged = false;
+	private readonly document: Document;
+	private readonly window: Window;
 
-		const widget = event.target.closest(mathWidgetSelector);
-		if (!widget || !view.dom.contains(widget)) {
-			return false;
-		}
+	public constructor(private readonly view: EditorView) {
+		this.document = view.dom.ownerDocument;
+		this.window = this.document.defaultView!;
+	}
 
-		const contentFrom = readPositionAttribute(widget, 'data-joplin-live-math-content-from');
-		const contentTo = readPositionAttribute(widget, 'data-joplin-live-math-content-to');
-		if (contentFrom === null || contentTo === null) {
-			return false;
-		}
+	public start(event: MouseEvent): void {
+		if (event.button !== 0) return;
+		this.clear();
+		this.startEvent = event;
+		this.dragged = false;
+		this.document.addEventListener('mousemove', this.move);
+		this.document.addEventListener('mouseup', this.finish);
+		this.document.addEventListener('dragend', this.finish);
+		this.window.addEventListener('blur', this.finish);
+		// Freeze before CodeMirror applies the mousedown selection, which can hide source.
+		this.view.dispatch({ effects: setMathPointerSelecting.of(true) });
+	}
 
-		view.focus();
-		view.dispatch({
-			selection: {
-				anchor: clickPositionInExpression(event, widget, contentFrom, contentTo),
-			},
-			scrollIntoView: true,
-		});
+	private move = (event: MouseEvent): void => {
+		if (this.startEvent && Math.max(
+			Math.abs(event.clientX - this.startEvent.clientX),
+			Math.abs(event.clientY - this.startEvent.clientY)
+		) > 4) this.dragged = true;
+		if ((event.buttons & 1) === 0) this.finish();
+	};
 
-		return true;
+	private finish = (): void => {
+		if (!this.startEvent) return;
+		this.clear();
+		// Let CodeMirror finish mouseup and the following click before changing geometry.
+		this.finishTimer = this.window.setTimeout(() => {
+			this.finishTimer = null;
+			if (this.view.state.field(mathDecorationsField, false)?.pointerSelecting) {
+				this.view.dispatch({ effects: setMathPointerSelecting.of(false) });
+			}
+		}, 0);
+	};
+
+	private clear(): void {
+		this.startEvent = null;
+		this.document.removeEventListener('mousemove', this.move);
+		this.document.removeEventListener('mouseup', this.finish);
+		this.document.removeEventListener('dragend', this.finish);
+		this.window.removeEventListener('blur', this.finish);
+		if (this.finishTimer !== null) this.window.clearTimeout(this.finishTimer);
+		this.finishTimer = null;
+	}
+
+	public update(update: ViewUpdate): void {
+		if (update.docChanged) this.clear();
+	}
+
+	public destroy(): void {
+		this.clear();
+	}
+}
+
+export const liveMathClickHandler = ViewPlugin.fromClass(MathPointerSelection, {
+	eventObservers: {
+		mousedown(event) { this.start(event); },
 	},
-	copy: (event, view) => {
-		if (!event.clipboardData) {
-			return false;
-		}
+	eventHandlers: {
+		click(event, view) {
+			if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey ||
+				event.detail > 1 || this.dragged || !view.state.selection.main.empty ||
+				!(event.target instanceof Element)) {
+				return false;
+			}
 
-		const field = view.state.field(mathDecorationsField, false);
-		if (!field) {
-			return false;
-		}
+			const widget = event.target.closest(mathWidgetSelector);
+			if (!widget || !view.dom.contains(widget)) {
+				return false;
+			}
 
-		const source = mathSourceForCopy(view.state, field.expressions) ??
-			selectedWidgetSourceForCopy(view);
-		if (source === null) {
-			return false;
-		}
+			const contentFrom = readPositionAttribute(widget, 'data-joplin-live-math-content-from');
+			const contentTo = readPositionAttribute(widget, 'data-joplin-live-math-content-to');
+			if (contentFrom === null || contentTo === null) {
+				return false;
+			}
 
-		event.clipboardData.setData('text/plain', source);
-		event.preventDefault();
-		return true;
+			view.focus();
+			view.dispatch({
+				selection: {
+					anchor: clickPositionInExpression(event, widget, contentFrom, contentTo),
+				},
+				scrollIntoView: true,
+			});
+
+			return true;
+		},
+		copy(event, view) {
+			if (!event.clipboardData) {
+				return false;
+			}
+
+			const field = view.state.field(mathDecorationsField, false);
+			if (!field) {
+				return false;
+			}
+
+			const source = mathSourceForCopy(view.state, field.expressions) ??
+				selectedWidgetSourceForCopy(view);
+			if (source === null) {
+				return false;
+			}
+
+			event.clipboardData.setData('text/plain', source);
+			event.preventDefault();
+			return true;
+		},
 	},
 });
 
@@ -336,34 +410,40 @@ const parseExpressions = (state: EditorState): MathExpression[] =>
 
 const recompute = (state: EditorState): MathDecorationState => {
 	if (!state.facet(liveMathEnabledFacet)) {
-		return { expressions: [], decorations: Decoration.none };
+		return { expressions: [], decorations: Decoration.none, pointerSelecting: false };
 	}
 
 	const expressions = parseExpressions(state);
-	return { expressions, decorations: buildDecorations(state, expressions) };
+	return { expressions, decorations: buildDecorations(state, expressions), pointerSelecting: false };
 };
 
 export const mathDecorationsField = StateField.define<MathDecorationState>({
 	create: recompute,
 	update: (value, transaction) => {
-		if (transaction.docChanged) {
+		if (transaction.docChanged ||
+			transaction.state.facet(liveMathEnabledFacet) !== transaction.startState.facet(liveMathEnabledFacet)) {
 			return recompute(transaction.state);
 		}
 
-		if (transaction.selection) {
+		let pointerSelecting = value.pointerSelecting;
+		for (const effect of transaction.effects) {
+			if (effect.is(setMathPointerSelecting)) pointerSelecting = effect.value;
+		}
+
+		// Keep both rendered widgets and already-open source fixed throughout a drag.
+		if (pointerSelecting) return { ...value, pointerSelecting };
+
+		if (transaction.selection || transaction.reconfigured || pointerSelecting !== value.pointerSelecting) {
 			// The document is unchanged, so the parsed expressions (and their
 			// absolute positions) are still valid. Only the selection-sensitive
 			// source-vs-widget decision needs recomputing, so skip re-parsing.
 			return {
 				expressions: value.expressions,
+				pointerSelecting,
 				decorations: buildDecorations(transaction.state, value.expressions, {
-					revealBoundaryExpressions: transaction.isUserEvent('select.pointer'),
+					revealBoundaryExpressions: value.pointerSelecting || transaction.isUserEvent('select.pointer'),
 				}),
 			};
-		}
-
-		if (transaction.reconfigured) {
-			return recompute(transaction.state);
 		}
 
 		return value;

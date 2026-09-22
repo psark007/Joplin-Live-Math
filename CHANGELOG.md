@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.21
+
+- Keep previews and already-open TeX stationary while dragging a mouse selection; update rendering after release.
+- Preserve drag selections and Shift-click selection extension instead of treating them as equation-editing clicks.
+- Replace vertical display-widget margins with padding so CodeMirror correctly maps clicks to text below equations.
+- Add real mouse-drag regressions for forward/backward selection, partial source copying, list/quote layouts, and interrupted gestures.
+
 ## 0.1.20
 
 - Preserve literal comparison operators in indented and blockquoted display math.
