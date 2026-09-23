@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.22
+
+- Render inline and same-line display math inside Joplin's native interactive Markdown table cells, independently of Rich Markdown and Rich Tables.
+- Keep KaTeX previews separate from native editable text to preserve cell editing, Tab navigation, delayed saves, and table actions.
+- Preserve ordinary inline formatting and `<br>` in math cells; document multiline table entries and escaped pipes.
+- Copy a rendered math cell as Markdown and keep raw cell source selectable in either direction.
+- Add browser regressions against checksum-pinned Joplin 3.7.18 table source at desktop and narrow widths. Upstream fixture code is not included in the plugin.
+
 ## 0.1.21
 
 - Keep previews and already-open TeX stationary while dragging a mouse selection; update rendering after release.

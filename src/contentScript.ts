@@ -1,4 +1,5 @@
 import { Compartment, type Extension, type StateEffect } from '@codemirror/state';
+import { nativeTableMath } from './nativeTableMath';
 import {
 	liveMathClickHandler,
 	liveMathEnabledFacet,
@@ -47,7 +48,7 @@ export default (context: ContentScriptContext) => ({
 				return [liveMathLoadedAttribute, liveMathEnabledFacet.of(false)];
 			}
 
-			return [liveMathLoadedAttribute, liveMathEnabledFacet.of(true), liveMathClickHandler, mathDecorationsField];
+			return [liveMathLoadedAttribute, liveMathEnabledFacet.of(true), liveMathClickHandler, mathDecorationsField, nativeTableMath];
 		};
 
 		const liveMathCompartment = new Compartment();

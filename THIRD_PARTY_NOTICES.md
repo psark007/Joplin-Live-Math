@@ -12,13 +12,23 @@ The full license from the installed KaTeX package is included in every `.jpl` ar
 
 ## CodeMirror And Lezer
 
-CodeMirror and Lezer modules, including `@lezer/markdown` for fenced-code boundaries, are supplied by Joplin at runtime. They are externalized from the plugin's content script, not bundled in the `.jpl`.
+CodeMirror and Lezer modules, including `@lezer/markdown` for fenced-code boundaries, table source mapping, and inline Markdown parsing, are supplied by Joplin at runtime. They are externalized from the plugin's content script, not bundled in the `.jpl`.
 
 Repositories: https://github.com/codemirror and https://github.com/lezer-parser/markdown
 
 ## Design References
 
 The live-preview behavior was also informed by https://github.com/blueberrycongee/codemirror-live-markdown. That library is not bundled with this plugin.
+
+## Joplin Native Table Test Fixtures
+
+Native table integration was checked against Joplin 3.7.18:
+https://github.com/laurent22/joplin/tree/v3.7.18/packages/editor/CodeMirror
+
+The optional `npm run test:tables` command downloads checksum-pinned upstream table-widget and table-utility source into an ignored local test directory. This source is licensed under AGPL-3.0:
+https://github.com/laurent22/joplin/blob/v3.7.18/LICENSE
+
+These files are used only by the browser test harness. They are not copied into plugin source, committed to this repository, or bundled in the distributed `.jpl`.
 
 ## joplin-rich-tables
 

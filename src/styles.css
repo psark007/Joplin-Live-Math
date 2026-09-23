@@ -59,3 +59,43 @@
 .cm-line.joplin-live-math-source-line {
 	background-color: rgba(127, 127, 127, 0.1);
 }
+
+/* Keep native cells focusable for Joplin's Tab navigation, but show our separate preview. */
+.cm-tw .cm-tw-text.joplin-live-math-table-source-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+}
+
+.joplin-live-math-table-preview {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	cursor: text;
+}
+
+.joplin-live-math-table-preview[hidden] {
+	display: none;
+}
+
+.cm-tw-text.cm-tw-match + .joplin-live-math-table-preview {
+	background-color: var(--joplin-search-marker-background-color, rgba(255, 220, 0, 0.45));
+	color: var(--joplin-search-marker-color, inherit);
+}
+
+.cm-tw-mod-link .joplin-live-math-table-preview a[href] {
+	cursor: pointer;
+}
+
+.joplin-live-math-table-equation {
+	display: inline-block;
+	max-width: 100%;
+	text-indent: 0;
+}
+
+.joplin-live-math-table-equation > .katex-display {
+	margin: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
