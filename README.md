@@ -4,11 +4,11 @@ Live KaTeX previews in Joplin's Markdown editor. Equations render in place when 
 
 ## Project Links
 
-- [Source repository](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math)
-- [Releases](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/releases)
-- [Issue tracker](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/issues)
+- [Source repository](https://github.com/psark007/Joplin-Live-Math)
+- [Releases](https://github.com/psark007/Joplin-Live-Math/releases)
+- [Issue tracker](https://github.com/psark007/Joplin-Live-Math/issues)
 - [Changelog](CHANGELOG.md)
-- Clone: `ssh://git@git.pawelsarkowicz.xyz:2222/ps/Joplin-Live-Math.git`
+- Clone: `https://github.com/psark007/Joplin-Live-Math.git`
 
 ## Requirements
 
@@ -113,7 +113,7 @@ KaTeX parse failures can appear as red TeX. Unmatched delimiters stay as source.
 
 For native tables, check that Live Math is at least 0.1.22 and try the table example above. The integration depends on Joplin's native table DOM; if a future version changes it, unsupported tables are left untouched. Turning off interactive table editing exposes the underlying Markdown as a fallback.
 
-For a rendering or interaction bug, include a minimal note in a fenced code block, your Joplin/plugin versions, theme, and relevant editor plugins in an [issue](https://git.pawelsarkowicz.xyz/ps/Joplin-Live-Math/issues). If the extension fails to load, **Help > Toggle Development Tools** may contain a relevant `Joplin-Live-Math` error.
+For a rendering or interaction bug, include a minimal note in a fenced code block, your Joplin/plugin versions, theme, and relevant editor plugins in an [issue](https://github.com/psark007/Joplin-Live-Math/issues). If the extension fails to load, **Help > Toggle Development Tools** may contain a relevant `Joplin-Live-Math` error.
 
 ## Known Limitations
 
@@ -130,7 +130,7 @@ For a rendering or interaction bug, include a minimal note in a fenced code bloc
 Use Node.js 22.12+ in the 22.x line, or Node.js 24+, and npm. Node is needed only to build/test the plugin, not to install a `.jpl` in Joplin.
 
 ```bash
-git clone ssh://git@git.pawelsarkowicz.xyz:2222/ps/Joplin-Live-Math.git
+git clone https://github.com/psark007/Joplin-Live-Math.git
 cd Joplin-Live-Math
 npm ci
 npm run typecheck
@@ -177,6 +177,10 @@ The first run downloads two checksum-pinned Joplin 3.7.18 source files into the 
 - `scripts/archive.js` and `scripts/checkPackage.js`: packaging and archive smoke checks.
 
 CodeMirror and Lezer packages are externalized and supplied by Joplin at runtime. KaTeX is bundled. This avoids loading a second copy of CodeMirror into Joplin's editor.
+
+## AI Disclosure
+
+This project was developed with the assistance of AI coding tools. AI-assisted work can still contain mistakes, so treat it like any other software: evaluate it for your own use case.
 
 ## References And Licenses
 

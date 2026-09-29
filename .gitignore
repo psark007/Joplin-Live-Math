@@ -8,3 +8,13 @@ coverage/
 test-results/
 playwright-report/
 .joplin-table-fixture/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor and OS state
+.idea/
+.vscode/
+*.tsbuildinfo

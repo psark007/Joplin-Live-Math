@@ -5,7 +5,7 @@
 	"version": "0.1.22",
 	"name": "Joplin-Live-Math",
 	"description": "Render LaTeX/KaTeX math directly in Joplin's CodeMirror 6 Markdown editor when the expression is not being edited.",
-	"author": "Pawel",
+	"author": "Pawel Sarkowicz",
 	"platforms": [
 		"desktop"
 	],
