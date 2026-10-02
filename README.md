@@ -2,14 +2,6 @@
 
 Live KaTeX previews in Joplin's Markdown editor. Equations render in place when you are not editing them; clicking a preview or moving the cursor into it reveals the original TeX. The preview never rewrites your note.
 
-## Project Links
-
-- [Source repository](https://github.com/psark007/Joplin-Live-Math)
-- [Releases](https://github.com/psark007/Joplin-Live-Math/releases)
-- [Issue tracker](https://github.com/psark007/Joplin-Live-Math/issues)
-- [Changelog](CHANGELOG.md)
-- Clone: `https://github.com/psark007/Joplin-Live-Math.git`
-
 ## Requirements
 
 - Joplin desktop 3.1 or newer, using the CodeMirror 6 Markdown editor.
@@ -20,7 +12,7 @@ Earlier user verification was on Joplin 3.6.14 on Linux with Rich Markdown. Nati
 
 ## Installation
 
-Install a `.jpl` attached to a repository release, or build one locally as described below.
+Install a `.jpl` from a release, or build one locally as described below.
 
 1. In Joplin, open **Tools > Options > Plugins** and choose **Install from file** from the plugin menu.
 2. Select `Joplin-Live-Math.jpl`.
@@ -113,7 +105,7 @@ KaTeX parse failures can appear as red TeX. Unmatched delimiters stay as source.
 
 For native tables, check that Live Math is at least 0.1.22 and try the table example above. The integration depends on Joplin's native table DOM; if a future version changes it, unsupported tables are left untouched. Turning off interactive table editing exposes the underlying Markdown as a fallback.
 
-For a rendering or interaction bug, include a minimal note in a fenced code block, your Joplin/plugin versions, theme, and relevant editor plugins in an [issue](https://github.com/psark007/Joplin-Live-Math/issues). If the extension fails to load, **Help > Toggle Development Tools** may contain a relevant `Joplin-Live-Math` error.
+If the extension fails to load, **Help > Toggle Development Tools** may contain a relevant `Joplin-Live-Math` error.
 
 ## Known Limitations
 

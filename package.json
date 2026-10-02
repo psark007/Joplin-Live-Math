@@ -4,14 +4,6 @@
 	"description": "Obsidian-style live KaTeX preview for Joplin's CodeMirror 6 Markdown editor.",
 	"main": "dist/index.js",
 	"author": "Pawel Sarkowicz",
-	"homepage": "https://github.com/psark007/Joplin-Live-Math",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/psark007/Joplin-Live-Math.git"
-	},
-	"bugs": {
-		"url": "https://github.com/psark007/Joplin-Live-Math/issues"
-	},
 	"scripts": {
 		"dist": "webpack --env joplin-plugin-config=buildMain && webpack --env joplin-plugin-config=buildExtraScripts && node scripts/archive.js",
 		"build": "npm run dist",
